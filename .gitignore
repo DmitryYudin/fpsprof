@@ -8,6 +8,7 @@ build*/
 *.yuv
 *.y4m
 *.m4a
+*.h265
 *.wav
 *.pcm
 *.log
