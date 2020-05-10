@@ -29,7 +29,23 @@ public:
 
         fp = !_report_filename.empty() ? fopen(_report_filename.c_str(), "wb") : _report;
         if (fp) {
-            int reportFlags = -1;
+            int reportFlags = -1 ^ REPORT_DETAILED;
+/*           
+            Disable detailed report print out since children go to first parent by the design
+            and this produce unexpected call stack view. The summary report fixes this issue.
+
+            LoopFilterLcu(fake)
+            ...
+            LoopFilterLcu(do_job)
+            V
+             -- LoopFilterLcu            --  0.0   0.0   121172.8    30278.3    0.25   98.6
+            |     DeblockingFilterLCU   |    2.4   2.4      842.4   202101.9  239.88  104.2
+            |     SaoLcu                |   13.5   7.6      152.6    36596.5  239.88   93.2
+            |       ProcessSao          |    3.4   0.6      615.1   147557.9  239.88   91.6
+            |   EncodeLCU               |    0.0   0.0   219132.1    54755.5    0.25    0.0
+             -> LoopFilterLcu            -> 16.5   0.3      125.2    29992.2  239.63   94.5
+
+*/
             fprintf(fp, "%s\n", _reporter.Report(reportFlags).c_str());
             if (!_report_filename.empty()) {
                 fclose(fp);
