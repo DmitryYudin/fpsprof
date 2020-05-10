@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="fpsprof::Event">
+    <DisplayString> {_stack_level}/{_stack_pos}#{_num_children} { _self_path } </DisplayString>
+  </Type>
+  <Type Name="fpsprof::ProfPoint">
+    <DisplayString> {_stack_level} { _name,s } </DisplayString>
+  </Type>
+  <Type Name="fpsprof::fastwrite_storage_t&lt;*&gt;">
+    <DisplayString> size={ _next_idx } _reading={ _reading } </DisplayString>
+  </Type>
+</AutoVisualizer>
