@@ -81,8 +81,6 @@ struct ThreadProf {
 #if !USE_FASTWRITE_STORAGE
         _marks.emplace_back(name, _stack_level++, frame_flag, measure_process_time);
         ProfPoint* pp = &_marks.back(); // safe for a list<>
-        pp->Start();
-        return pp;
 #else
         if (_stack_level == 0) {
             unsigned events_count = _marks.size();
@@ -93,20 +91,50 @@ struct ThreadProf {
         }
         ProfPoint* pp = _marks.alloc_item();
         *pp = ProfPoint(name, _stack_level++, frame_flag, measure_process_time);
+#endif
+#ifndef NDEBUG
+        _pp_last_in = pp;
+#endif
         pp->Start();
         return pp;
-#endif
     }
     void pop(ProfPoint* pp) {
         _stack_level--;
 
-        pp->Stop();
         if (pp->stack_level() != _stack_level) {
-            fprintf(stderr, "Wrong call order\n");
-            exit(1);
+            panic_and_exit(pp);
         }
+        pp->Stop();
+#ifndef NDEBUG
+        _pp_last_out = pp;
+#endif
     }
 private:
+    void panic_and_exit(ProfPoint* pp) {
+        const char* exit_name = pp->name();
+        unsigned exit_level = pp->stack_level();
+        std::list<ProfPoint> marks;
+#if !USE_FASTWRITE_STORAGE
+        marks = std::move(_marks);
+#else
+        marks = _marks.to_list();
+#endif
+        for (const auto& mark : marks) {
+            if (mark.complete()) {
+                continue;
+            }
+            unsigned n = mark.stack_level();
+            char info[32] = "";
+            if (n == exit_level && mark.name() == exit_name) {
+                strcpy(info, " <- exit is here");
+            }
+            fprintf(stderr, "%2u: %*s %s%s\n", n, 2*n, "", mark.name(), info);
+        }
+        fprintf(stderr, "error: pop '%s' event with a stack level of %u, "
+            "but current stack level is %u\n",  exit_name, exit_level, _stack_level);
+
+        exit(1);
+    }
     ThreadMgr& _threadMgr;
 #if !USE_FASTWRITE_STORAGE
     std::list<ProfPoint> _marks;
@@ -117,6 +145,11 @@ private:
     int _stack_level = 0;
     unsigned _events_count_prev = 0;
     unsigned _events_num_max = 0;
+
+#ifndef NDEBUG
+    const ProfPoint* _pp_last_in = NULL;
+    const ProfPoint* _pp_last_out = NULL;
+#endif
 };
 
 timer::wallclock_t ProfPoint::_init_wc = timer::wallclock::timestamp();
