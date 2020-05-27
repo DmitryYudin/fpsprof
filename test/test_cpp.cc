@@ -9,6 +9,14 @@
 #include <thread>
 #include <chrono>
 
+static void foo_recursive(int n)
+{
+    FPSPROF_SCOPED("foo_recur")
+    if (n) {
+        foo_recursive(n - 1);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+}
 static void encode_frame(int n)
 {
     FPSPROF_SCOPED_FRAME("encode_frame")
@@ -35,6 +43,8 @@ static void encode_frame(int n)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     FPSPROF_STOP(foo_all)
+
+    foo_recursive(3);
 }
 
 int main(int argc, char *argv[])

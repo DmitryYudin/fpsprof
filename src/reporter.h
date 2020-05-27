@@ -16,8 +16,9 @@ namespace fpsprof {
 
 const int REPORT_THREAD_ROOT = (1 << 0);
 const int REPORT_STACK_TOP = (1 << 1);
-const int REPORT_SUMMARY = (1 << 2);
-const int REPORT_DETAILED = (1 << 3);
+const int REPORT_SUMMARY_NO_REC = (1 << 2);
+const int REPORT_SUMMARY = (1 << 3);
+const int REPORT_DETAILED = (1 << 4);
 
 class Reporter {
 public:

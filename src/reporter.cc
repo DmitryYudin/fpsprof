@@ -118,6 +118,38 @@ void print_header(std::ostream& os, const std::string& header, unsigned nameLenM
     os << s;
 }
 
+struct PrettyName // unsafe
+{
+    static const char* name(const EventAcc& accum) // unsafe
+    {
+        unsigned n = PrettyName::fill_size(accum);
+        memset(_name, ' ', n);
+        strcpy(_name + n, accum.name());
+
+        if (accum.num_recursions()) {
+            sprintf(_name + strlen(_name), "[x%u]", accum.num_recursions());
+        }
+        return _name;
+    }
+    static unsigned name_size(const EventAcc& accum) {
+        unsigned recur_size = 0;
+        if (accum.num_recursions()) {
+            recur_size = 1 + (unsigned)LOG10(accum.num_recursions()); // rare case
+            recur_size += 3; // "[x%u] "
+        }
+        unsigned n = PrettyName::fill_size(accum);
+        return n + (unsigned)strlen(accum.name()) + recur_size;
+    }
+
+private:
+    static unsigned fill_size(const EventAcc& accum) {
+        unsigned stack_fill_width = std::min(128, 2 * (1 + accum.stack_level()));
+        return stack_fill_width;
+    }
+    static char _name[1024];
+};
+char PrettyName::_name[];
+
 static
 void print_event(
     std::ostream& os,
@@ -126,11 +158,7 @@ void print_event(
     int nameLenMax
 )
 {
-    char name[1024];
-    unsigned fill_pos = std::min(128, 2 * (1 + accum.stack_level()));
-    memset(name, ' ', fill_pos);
-    strcpy(name + fill_pos, accum.name());
-
+    const char* name = PrettyName::name(accum);
     const char* NA = "-";
 
     double cpuFreqMHz = 2800; // 2.8 GHz
@@ -278,6 +306,9 @@ void print_threads(
             case REPORT_STACK_TOP:
                 header = std::string("Stack top");
                 break;
+            case REPORT_SUMMARY_NO_REC:
+                header = "Summary report (no recursion)";
+                break;
             case REPORT_SUMMARY:
                 header = "Summary report";
                 break;
@@ -363,14 +394,21 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax) const
         auto summary = EventAcc::CreateSummary(accums);
         threadSummary.push_back(summary);
     }
-    int nameWidth = 0;
+
+    std::vector< std::list<EventAcc> > threadSummaryNoRec;
+    for (const auto& accums : threadSummary) {
+        auto summaryNoRec = EventAcc::CreateSummaryNoRec(accums);
+        threadSummaryNoRec.push_back(summaryNoRec);
+    }
+    
+    unsigned nameWidth = 0;
     {
         int stackLevelMax_ = 0;
         for (const auto& accums : threadAccums) {
             int stackLevel = 0;
             for (const auto& accum : accums) {
                 stackLevel = std::max(stackLevel, accum.stack_level());
-                nameWidth = std::max(nameWidth, 2 * (1 + accum.stack_level()) + (int)strlen(accum.name()));
+                nameWidth = std::max(nameWidth, PrettyName::name_size(accum));
             }
             stackLevelMax_ = std::max(stackLevelMax_, stackLevel);
         }
@@ -392,6 +430,9 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax) const
     }
     if (reportFlags & REPORT_STACK_TOP) {
         print_threads(ss, REPORT_STACK_TOP, threadSummary, stackLevelMax, nameWidth);
+    }
+    if (reportFlags & REPORT_SUMMARY_NO_REC) {
+        print_threads(ss, REPORT_SUMMARY_NO_REC, threadSummaryNoRec, stackLevelMax, nameWidth);
     }
     if (reportFlags & REPORT_SUMMARY) {
         print_threads(ss, REPORT_SUMMARY, threadSummary, stackLevelMax, nameWidth);

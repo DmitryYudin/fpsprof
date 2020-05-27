@@ -99,11 +99,13 @@ class EventAcc : public Event {
 public:
     static std::list<EventAcc> Create(const std::list<Event>& events);
     static std::list<EventAcc> CreateSummary(const std::list<EventAcc>& accums);
+    static std::list<EventAcc> CreateSummaryNoRec(const std::list<EventAcc>& accums);
 
     explicit EventAcc(const Event& event); // casting
 
     void AddEvent(const Event& event);
     void AddEventAccum(const EventAcc& eventAcc);
+    void AddMergeRecursion(const EventAcc& eventAcc);
 
     uint64_t realtime_used_sum() const { return _realtime_sum; }
     uint64_t cpu_used_sum() const { return _cpu_sum; }
@@ -115,9 +117,12 @@ public:
     uint64_t children_realtime_used_avg() const { return _children_realtime_sum / _count; }
     uint64_t children_cpu_used_avg() const { return _children_cpu_sum / _count; }
     unsigned num_children_max() const { return _num_children_max; }
+    unsigned num_children_uniqu() const { return _num_children_uniqu; }
     unsigned count() const { return _count; }
+    unsigned num_recursions() const { return _num_recursions; }
 
 private:
+    static void update_num_children_uniqu(std::list<EventAcc>& accums);
     unsigned num_children() const; // disallowed, use _max() for accumalated events
 
     unsigned _count;
@@ -126,6 +131,8 @@ private:
     uint64_t _children_realtime_sum;
     uint64_t _children_cpu_sum;
     unsigned _num_children_max;
+    unsigned _num_recursions;
+    unsigned _num_children_uniqu;
 
 protected:
     EventAcc(); //disallowed

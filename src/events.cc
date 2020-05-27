@@ -14,6 +14,7 @@
 #include <map>
 #include <stack>
 #include <vector>
+#include <set>
 #include <algorithm>
 #include <assert.h>
 
@@ -134,6 +135,7 @@ EventAcc::EventAcc(const Event& event)
     , _children_realtime_sum(event.children_realtime_used())
     , _children_cpu_sum(event.children_cpu_used())
     , _num_children_max(event.num_children())
+    , _num_recursions(0)
 {
 }
 
@@ -143,6 +145,7 @@ void EventAcc::AddEvent(const Event& event)
     assert(_stack_level == event.stack_level());
     assert(_frame_flag == event.frame_flag());
     assert(_measure_process_time == event.measure_process_time());
+    assert(_num_recursions == 0);
 
     _realtime_sum += event.stop_nsec() - event.start_nsec();
     _cpu_sum += event.cpu_used();
@@ -163,6 +166,7 @@ void EventAcc::AddEventAccum(const EventAcc& eventAcc)
     }
     assert(_frame_flag == eventAcc.frame_flag());
     assert(_measure_process_time == eventAcc.measure_process_time());
+    assert(_num_recursions == 0);
 
     _realtime_sum += eventAcc.realtime_used_sum();
     _cpu_sum += eventAcc.cpu_used_sum();
@@ -170,6 +174,43 @@ void EventAcc::AddEventAccum(const EventAcc& eventAcc)
     _children_cpu_sum += eventAcc.children_cpu_used_sum();
     _num_children_max = std::max(_num_children_max, eventAcc.num_children_max());
     _count += eventAcc.count();
+}
+
+void EventAcc::AddMergeRecursion(const EventAcc& eventAcc)
+{
+    assert(self_path() == eventAcc.parent_path());
+    assert(_num_children_uniqu == 1);
+    assert(0 == eventAcc.num_children_uniqu());
+    assert(_frame_flag == eventAcc.frame_flag());
+    assert(_measure_process_time == eventAcc.measure_process_time());
+    assert(_stack_level + 1 == eventAcc.stack_level());
+    assert(_realtime_sum >= eventAcc.realtime_used_sum());
+    assert(_num_recursions >= 0);
+    assert(0 == eventAcc.children_realtime_used_sum());
+    assert(0 == eventAcc.children_cpu_used_sum());
+
+    _count += eventAcc.count();
+    _children_realtime_sum = 0;
+    _children_cpu_sum = 0;
+    _num_children_uniqu = 0;
+    _num_recursions = eventAcc.num_recursions() + 1;
+}
+
+void EventAcc::update_num_children_uniqu(std::list<EventAcc>& accums)
+{
+    for (auto it = accums.begin(); it != accums.end();) {
+        auto& parent = *it++;
+        std::set<std::string> children;
+        std::for_each(it, accums.end(),
+            [&parent, &children](EventAcc& accum) {
+                if (parent.self_path() != accum.parent_path()) {
+                    return;
+                }
+                children.insert(accum.self_path());
+            }
+        );
+        parent._num_children_uniqu = (unsigned)children.size();
+    }
 }
 
 std::list<EventAcc> EventAcc::Create(const std::list<Event>& events)
@@ -194,6 +235,9 @@ std::list<EventAcc> EventAcc::Create(const std::list<Event>& events)
             it_accum->AddEvent(event);
         }
     }
+
+    update_num_children_uniqu(accums);
+
     return accums;
 }
 
@@ -213,7 +257,57 @@ std::list<EventAcc> EventAcc::CreateSummary(const std::list<EventAcc>& accums)
             it_accum->AddEventAccum(accum);
         }
     }
+
+    update_num_children_uniqu(accumSummary);
+
     return accumSummary;
+}
+
+std::list<EventAcc> EventAcc::CreateSummaryNoRec(const std::list<EventAcc>& accums)
+{
+    // process max deepth first, than move level higher
+    std::list<EventAcc> accumSummary;
+    std::set<std::string> invalidated;
+    for (auto it = accums.begin(); it != accums.end();) {
+        auto& accum = *it++;
+        if (accumSummary.empty()) {
+            accumSummary.push_back(accum);
+            continue;
+        }
+        switch (accum.num_children_uniqu()) {
+            default: 
+                accumSummary.push_back(accum);
+                break;
+            case 0:
+                if (invalidated.end() == invalidated.find(accum.self_path())) {
+                    accumSummary.push_back(accum);
+                }
+                break;
+            case 1: {
+                accumSummary.push_back(accum);
+
+                auto& parent = accumSummary.back();
+                auto it_child = std::find_if(it, accums.end(),
+                    [&parent](const EventAcc& eventAccum) {
+                        return parent.self_path() == eventAccum.parent_path();
+                    }
+                );
+                assert(it_child != accums.end());
+                const auto& child = *it_child;
+                if (0 == child.num_children_uniqu() &&
+                    parent.name() == child.name()) {
+                    parent.AddMergeRecursion(child);
+                    invalidated.insert(child.self_path());
+                }
+                break;
+            }
+        }
+    }
+    if (accumSummary.size() == accums.size()) {
+        return accumSummary;
+    } else {
+        return CreateSummaryNoRec(accumSummary);
+    }
 }
 
 RootAcc::RootAcc(const EventAcc& eventAcc, unsigned threadId)
