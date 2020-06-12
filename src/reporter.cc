@@ -81,16 +81,18 @@ bool Reporter::Deserialize(const char* filename)
     return true;
 }
 
-void Reporter::AddProfPoints(const std::list<ProfPoint>& marks)
+void Reporter::AddProfPoints(std::list<ProfPoint>&& marks)
 {
     if (marks.empty()) {
         return;
     }
 
     std::list<RawEvent> rawEvents;
-    for (const ProfPoint& pp : marks) {
+    while (!marks.empty()) {
+        const auto& pp = marks.front();
         assert(pp.complete());
         rawEvents.push_back((RawEvent)pp);
+        marks.pop_front();
     }
 
     int thread_id = (int)_rawThreadMap.size();
@@ -100,7 +102,7 @@ void Reporter::AddProfPoints(const std::list<ProfPoint>& marks)
 static
 void print_header(std::ostream& os, const std::string& header, unsigned nameLenMax)
 {
-    const std::string delim = std::string(nameLenMax + 49, '-');
+    const std::string delim = std::string(nameLenMax + 51, '-');
     os << delim << std::endl;
     os << header << std::endl;
     os << delim << std::endl;
@@ -352,14 +354,14 @@ void print_threads(
     os << std::endl;
 }
 
-std::string Reporter::Report(int reportFlags, int stackLevelMax) const
+std::string Reporter::Report(int reportFlags, int stackLevelMax)
 {
     std::vector< std::list<Event> > threadEvents;
-    for (const auto& rawEventsItem : _rawThreadMap) {
-        const auto& rawEvents = rawEventsItem.second;
+    for (auto& rawEventsItem : _rawThreadMap) {
+        auto& rawEvents = rawEventsItem.second;
 
-        auto events = Event::Create(rawEvents);
-        threadEvents.push_back(events);
+        auto events = Event::Create(std::move(rawEvents));
+        threadEvents.push_back(std::move(events));
     }
     {
         int mainThreadId = -1;
@@ -382,21 +384,21 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax) const
     }
 
     std::vector< std::list<EventAcc> > threadAccums;
-    for (const auto& events : threadEvents) {
-        auto accums = EventAcc::Create(events);
-        threadAccums.push_back(accums);
+    for (auto& events : threadEvents) {
+        auto accums = EventAcc::Create(std::move(events));
+        threadAccums.push_back(std::move(accums));
     }
 
     std::vector< std::list<EventAcc> > threadSummary;
     for (const auto& accums : threadAccums) {
         auto summary = EventAcc::CreateSummary(accums);
-        threadSummary.push_back(summary);
+        threadSummary.push_back(std::move(summary));
     }
 
     std::vector< std::list<EventAcc> > threadSummaryNoRec;
     for (const auto& accums : threadSummary) {
         auto summaryNoRec = EventAcc::CreateSummaryNoRec(accums);
-        threadSummaryNoRec.push_back(summaryNoRec);
+        threadSummaryNoRec.push_back(std::move(summaryNoRec));
     }
     
     unsigned nameWidth = 0;

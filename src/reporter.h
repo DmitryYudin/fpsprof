@@ -25,9 +25,10 @@ public:
     void Serialize(std::ostream& os) const;
     bool Deserialize(const char* filename);
 
-    void AddProfPoints(const std::list<ProfPoint>& marks);
+    void AddProfPoints(std::list<ProfPoint>&& marks);
 
-    std::string Report(int reportFlags, int stackLevelMax = -1) const;
+    // one-shot (destroy data on return)
+    std::string Report(int reportFlags, int stackLevelMax = -1);
 
 private:
     std::map<int, std::list<RawEvent> > _rawThreadMap;

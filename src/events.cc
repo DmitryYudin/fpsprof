@@ -107,11 +107,12 @@ void Event::add_child(const Event& child)
     _num_children++;
 }
 
-std::list<Event> Event::Create(const std::list<RawEvent>& rawEvents)
+std::list<Event> Event::Create(std::list<RawEvent>&& rawEvents)
 {
     std::list<Event> events;
     std::stack<Event*> stack;
-    for (const auto& rawEvent : rawEvents) {
+    while (!rawEvents.empty()) {
+        auto& rawEvent = rawEvents.front();
         while (!stack.empty() && stack.top()->stack_level() >= rawEvent.stack_level()) {
             stack.pop();
         }
@@ -123,6 +124,8 @@ std::list<Event> Event::Create(const std::list<RawEvent>& rawEvents)
 
         events.push_back(event);
         stack.push(&events.back());
+
+        rawEvents.pop_front();
     }
     return events;
 }
@@ -213,7 +216,7 @@ void EventAcc::update_num_children_uniqu(std::list<EventAcc>& accums)
     }
 }
 
-std::list<EventAcc> EventAcc::Create(const std::list<Event>& events)
+std::list<EventAcc> EventAcc::Create(std::list<Event>&& events)
 {
     std::list<EventAcc> accums;
     if (events.size() == 0) {
@@ -221,7 +224,8 @@ std::list<EventAcc> EventAcc::Create(const std::list<Event>& events)
     }
     assert(events.front().stack_level() == 0);
 
-    for (const auto& event: events) {
+    while (!events.empty()) {
+        auto& event = events.front();
         auto it_accum = std::find_if(accums.begin(), accums.end(),
             [&event](const EventAcc& eventAcc) {
             return eventAcc.parent_path() == event.parent_path() \
@@ -234,6 +238,7 @@ std::list<EventAcc> EventAcc::Create(const std::list<Event>& events)
         } else {
             it_accum->AddEvent(event);
         }
+        events.pop_front();
     }
 
     update_num_children_uniqu(accums);

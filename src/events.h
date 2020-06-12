@@ -11,6 +11,7 @@
 #include <ostream>
 #include <list>
 #include <string>
+#include <map>
 
 namespace fpsprof {
 
@@ -45,11 +46,18 @@ public:
 
 protected:
     std::string make_hash() const {
+        std::string name;
 #ifdef NDEBUG
-        return std::to_string((long long)_name) + "."
+        static std::map<const char*, unsigned> _ptr_hash;
+        if (_ptr_hash.find(_name) == _ptr_hash.end()) {
+            _ptr_hash[_name] = (unsigned)_ptr_hash.size();
+        }
+        unsigned idx = _ptr_hash[_name];
+        name = std::to_string(idx);
 #else
-        return std::string(_name) + "."
+        name = std::string(_name);
 #endif
+        return name + "."
             + std::to_string((int)_stack_level) + "."
             + std::to_string((int)_frame_flag) + "."
             + std::to_string((int)_measure_process_time);
@@ -70,7 +78,7 @@ class EventAcc;
 // Keep track of children count and own stack position
 class Event : public RawEvent {
 public:
-    static std::list<Event> Create(const std::list<RawEvent>& rawEvents);
+    static std::list<Event> Create(std::list<RawEvent>&& rawEvents);
 
     uint64_t children_realtime_used() const { return _children_realtime_used; }
     uint64_t children_cpu_used() const { return _children_cpu_used; }
@@ -97,7 +105,7 @@ private:
 
 class EventAcc : public Event {
 public:
-    static std::list<EventAcc> Create(const std::list<Event>& events);
+    static std::list<EventAcc> Create(std::list<Event>&& events);
     static std::list<EventAcc> CreateSummary(const std::list<EventAcc>& accums);
     static std::list<EventAcc> CreateSummaryNoRec(const std::list<EventAcc>& accums);
 

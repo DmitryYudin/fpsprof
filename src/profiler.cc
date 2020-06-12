@@ -64,8 +64,8 @@ public:
     void set_report_file(const char* filename) {
         _report_filename = filename ? filename : "";
     }
-    void onThreadProfExit(const std::list<ProfPoint>& marks) {
-        _reporter.AddProfPoints(marks);
+    void onThreadProfExit(std::list<ProfPoint>&& marks) {
+        _reporter.AddProfPoints(std::move(marks));
     }
 private:
     FILE* _serialize = NULL;
@@ -89,7 +89,7 @@ struct ThreadProf {
 #else
         marks = _marks.to_list();
 #endif
-        _threadMgr.onThreadProfExit(marks);
+        _threadMgr.onThreadProfExit(std::move(marks));
     }
 
     ProfPoint* push(const char* name, bool frame_flag) {
