@@ -12,6 +12,7 @@
 #include <string.h>
 #include <list>
 #include <algorithm>
+#include <fstream>
 
 #define USE_FASTWRITE_STORAGE 1
 namespace fpsprof {
@@ -19,15 +20,14 @@ namespace fpsprof {
 class ThreadMgr {
 public:
     ~ThreadMgr() {
-        FILE* fp = !_serialize_filename.empty() ? fopen(_serialize_filename.c_str(), "wb") : _serialize;
-        if (fp) {
-            fprintf(fp, "%s\n", _reporter.Serialize().c_str());
-            if (!_serialize_filename.empty()) {
-                fclose(fp);
+        if (!_serialize_filename.empty()) {
+            std::ofstream ofs(_serialize_filename, std::ios::out | std::ios::binary | std::ios::trunc);
+            if (ofs.is_open()) {
+                _reporter.Serialize(ofs);
+                ofs.close();
             }
         }
-
-        fp = !_report_filename.empty() ? fopen(_report_filename.c_str(), "wb") : _report;
+        FILE *fp = !_report_filename.empty() ? fopen(_report_filename.c_str(), "wb") : _report;
         if (fp) {
             int reportFlags = -1 ^ REPORT_DETAILED;
 /*           

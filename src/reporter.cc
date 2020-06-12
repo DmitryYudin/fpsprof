@@ -30,20 +30,18 @@
 
 namespace fpsprof {
 
-std::string Reporter::Serialize() const
+void Reporter::Serialize(std::ostream& os) const
 {
-    std::ostringstream os;
     for (const auto& rawEvents : _rawThreadMap) {
         int thread_id = rawEvents.first;
         const auto& events = rawEvents.second;
         for (const auto& event : events) {
             os << STREAM_PREFIX << " "
-                << std::setw(2) << thread_id << " " 
-                << event 
+                << std::setw(2) << thread_id << " "
+                << event
                 << std::endl;
         }
     }
-    return os.str();
 }
 
 bool Reporter::Deserialize(const char* filename)

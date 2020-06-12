@@ -22,8 +22,8 @@ const int REPORT_DETAILED = (1 << 4);
 
 class Reporter {
 public:
-    std::string Serialize() const;
-    bool Deserialize(const char* data);
+    void Serialize(std::ostream& os) const;
+    bool Deserialize(const char* filename);
 
     void AddProfPoints(const std::list<ProfPoint>& marks);
 
