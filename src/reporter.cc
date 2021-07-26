@@ -260,6 +260,10 @@ void print_tree(
     //     \bar-2
     std::vector<std::list<EventAcc>::const_iterator> children;
     {
+        if(parent.stack_level() == 9 && 0 == strcmp(parent.name(), "CompressCtu_InterRecur")) {
+   //         __debugbreak();
+        }
+        
         for(unsigned stack_pos = 0; stack_pos < parent.num_children_max(); stack_pos++) {
             auto child_begin = begin;
             while (true) {
@@ -420,7 +424,7 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax)
         }
     }
 
-#define DEBUG_REPORT 0
+#define DEBUG_REPORT 1
 #if DEBUG_REPORT
     std::ostream& ss = std::cout;
 #else
