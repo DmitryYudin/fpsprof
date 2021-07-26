@@ -287,6 +287,7 @@ void print_tree(
     for (unsigned idx = 0; idx < children.size(); idx++) {
         const auto& child_begin = children[idx];
         const auto& child_end = idx + 1 < children.size() ? children[idx+1] : end;
+//const auto& child_end = end;
         print_tree(os, frameTop, child_begin, child_end, stackLevelMax, nameWidth);
     }
 }

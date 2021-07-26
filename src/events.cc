@@ -109,6 +109,12 @@ void Event::add_child(const Event& child)
 
 std::list<Event> Event::Create(std::list<RawEvent>&& rawEvents)
 {
+    // restore call order: parent is always followed by all it's children
+    // root     
+    //    0
+    //      1
+    //        2 ...
+    //   0
     std::list<Event> events;
     std::stack<Event*> stack;
     while (!rawEvents.empty()) {
@@ -228,6 +234,10 @@ std::list<EventAcc> EventAcc::Create(std::list<Event>&& events)
     // For each new event find it an a list of already processed events
     while (!events.empty()) {
         auto& event = events.front();
+        if(0 == strcmp(event.name(), "CompressCtu_InterRecur")) {
+            __debugbreak();
+        }
+
         auto it = std::find_if(accums.begin(), accums.end(),
             [&event](const EventAcc& eventAcc) {
             return eventAcc.parent_path() == event.parent_path()
@@ -235,8 +245,39 @@ std::list<EventAcc> EventAcc::Create(std::list<Event>&& events)
                 && eventAcc.stack_pos() == event.stack_pos();
             }
         );
-        if (it == accums.end()) { // not found, create new entry
-            accums.push_back((EventAcc)event);
+        if (it == accums.end()) { 
+            // not found, insert new entry at the end of chilidren list (just after parent node)
+            // boo(stack_level=N, parent=foo)   //
+            // boo(N)                           // collected from different frames
+            // boo(N)                           //
+            //      boo_child(N+1)
+            //      ..
+            //      boo_child(N+1)
+            auto it = std::find_if(accums.rbegin(), accums.rend(),
+                [&event](const EventAcc& eventAcc) {
+                return eventAcc.self_path() == event.parent_path();
+                }
+            );
+            EventAcc eventAcc = (EventAcc)event;
+            if(it == accums.rend()) { // top most event, only
+                accums.push_back(eventAcc);
+            } else {
+                
+                auto it2 = it.base(); // next to 'it'
+                while(it2 != accums.end() && it2->parent_path() == event.parent_path()) {
+                    it2++;
+                }
+                accums.insert(it2, eventAcc);
+                
+                /*
+                auto it2 = std::find_if(it.base(), accums.end(),
+                    [&event](const EventAcc& eventAcc) {
+                    return eventAcc.parent_path() != event.parent_path();
+                    }
+                );
+                */
+                accums.insert(it2, eventAcc);
+            }
         } else { // found, accumulate it
             it->AddEvent(event);
         }
