@@ -109,10 +109,10 @@ void print_header(std::ostream& os, const std::string& header, unsigned nameLenM
 
     char s[2048];
 #if 0
-    sprintf(s, "%-*s %9s (%6s) %9s (%6s) %10s %7s %6s\n", nameLenMax, "name", 
+    sprintf(s, "%3s %-*s %9s (%6s) %9s (%6s) %10s %7s %6s\n", "st", nameLenMax, "name", 
         "incMHz/Fr", "inc%", "excMHz/Fr", "exc%", "call/sec", "call/fr", "cpu%");
 #else
-    sprintf(s, "%-*s %6s %6s %10s %10s %7s %6s\n", nameLenMax, "name",
+    sprintf(s, "%3s %-*s %6s %6s %10s %10s %7s %6s\n", "st", nameLenMax, "name",
         "inc%", "exc%", "fps", "call/sec", "call/fr", "cpu%");
 #endif
     os << s;
@@ -219,14 +219,14 @@ void print_event(
 
     char s[2048];
 #if 0
-    fprintf(s, "%-*s %s (%s) %s (%s) %s %s %s\n", 
-        nameLenMax, name, 
+    fprintf(s, "%3d %-*s %s (%s) %s (%s) %s %s %s\n", 
+        accum.stack_level(), nameLenMax, name, 
         totInclMHzPerFrame, totInclP, totExclMHzPerFrame, totExclP,
         selfInclFPS, numCalls, cpuP
         );
 #else
-    sprintf(s, "%-*s %s %s %s %s %s %s\n",
-        nameLenMax, name,
+    sprintf(s, "%3d %-*s %s %s %s %s %s %s\n",
+        accum.stack_level(), nameLenMax, name,
         totInclP, totExclP, totInclFPS,
         selfInclFPS, numCalls, cpuP
     );
