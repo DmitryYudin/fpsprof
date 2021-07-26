@@ -412,6 +412,7 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax)
             }
             stackLevelMax_ = std::max(stackLevelMax_, stackLevel);
         }
+        stackLevelMax_ += 1;
         if (stackLevelMax < 0) {
             stackLevelMax = stackLevelMax_;
         } else {
