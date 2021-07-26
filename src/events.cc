@@ -150,6 +150,7 @@ void EventAcc::AddEvent(const Event& event)
     assert(_measure_process_time == event.measure_process_time());
     assert(_num_recursions == 0);
 
+    // accumulate independent event: same stack level, same parent
     _realtime_sum += event.stop_nsec() - event.start_nsec();
     _cpu_sum += event.cpu_used();
     _children_realtime_sum += event.children_realtime_used();
@@ -224,19 +225,20 @@ std::list<EventAcc> EventAcc::Create(std::list<Event>&& events)
     }
     assert(events.front().stack_level() == 0);
 
+    // For each new event find it an a list of already processed events
     while (!events.empty()) {
         auto& event = events.front();
-        auto it_accum = std::find_if(accums.begin(), accums.end(),
+        auto it = std::find_if(accums.begin(), accums.end(),
             [&event](const EventAcc& eventAcc) {
-            return eventAcc.parent_path() == event.parent_path() \
-                && eventAcc.name() == event.name() \
+            return eventAcc.parent_path() == event.parent_path()
+                && eventAcc.name() == event.name()
                 && eventAcc.stack_pos() == event.stack_pos();
             }
         );
-        if (it_accum == accums.end()) {
+        if (it == accums.end()) { // not found, create new entry
             accums.push_back((EventAcc)event);
-        } else {
-            it_accum->AddEvent(event);
+        } else { // found, accumulate it
+            it->AddEvent(event);
         }
         events.pop_front();
     }
@@ -250,16 +252,16 @@ std::list<EventAcc> EventAcc::CreateSummary(const std::list<EventAcc>& accums)
 {
     std::list<EventAcc> accumSummary;
     for (const auto& accum : accums) {
-        auto it_accum = std::find_if(accumSummary.begin(), accumSummary.end(),
+        auto it = std::find_if(accumSummary.begin(), accumSummary.end(),
             [&accum](const EventAcc& eventAcc) {
-                return eventAcc.parent_path() == accum.parent_path() \
+                return eventAcc.parent_path() == accum.parent_path()
                     && eventAcc.name() == accum.name();
             }
         );
-        if (it_accum == accumSummary.end()) {
+        if (it == accumSummary.end()) {
             accumSummary.push_back(accum);
         } else {
-            it_accum->AddEventAccum(accum);
+            it->AddEventAccum(accum);
         }
     }
 

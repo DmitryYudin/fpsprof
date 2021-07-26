@@ -265,7 +265,7 @@ void print_tree(
             while (true) {
                 const auto& it = std::find_if(child_begin, end,
                     [&parent, stack_pos](const EventAcc& eventAcc) {
-                        return eventAcc.parent_path() == parent.self_path() \
+                        return eventAcc.parent_path() == parent.self_path()
                             && eventAcc.stack_pos() == stack_pos;
                     }
                 );
@@ -321,10 +321,10 @@ void print_threads(
     print_header(os, header, nameWidth);
 
     const EventAcc& frameTop = threadAccums[0].front();
-    for (unsigned threadId = 0; threadId < (unsigned)threadAccums.size(); threadId++) {
+    for (size_t threadId = 0; threadId < threadAccums.size(); threadId++) {
         const auto& accums = threadAccums[threadId];
 
-        RootAcc *rootAcc = RootAcc::Create(accums, threadId);
+        RootAcc *rootAcc = RootAcc::Create(accums, (unsigned)threadId);
         if (rootAcc) {
             print_event(os, frameTop, *rootAcc, nameWidth);
         }
@@ -345,7 +345,7 @@ void print_threads(
         }
         assert(roots.size() > 0);
 
-        for (unsigned i = 0; i < (unsigned)roots.size(); i++) {
+        for (size_t i = 0; i < roots.size(); i++) {
             const auto& begin = roots[i];
             const auto& end = i + 1 < roots.size() ? roots[i + 1] : accums.end();
             print_tree(os, frameTop, begin, end, stackLevelMax, nameWidth);
@@ -365,10 +365,10 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax)
     }
     {
         int mainThreadId = -1;
-        for(unsigned threadId = 0; threadId < (unsigned)threadEvents.size(); threadId++) {
+        for(size_t threadId = 0; threadId < threadEvents.size(); threadId++) {
             const auto& head = threadEvents[threadId].front();
             if (head.frame_flag()) {
-                mainThreadId = threadId;
+                mainThreadId = (unsigned)threadId;
                 break;
             }
         }
