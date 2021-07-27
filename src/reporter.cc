@@ -5,6 +5,7 @@
 
 #define NOMINMAX
 #include "reporter.h"
+#include "node.h"
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -365,6 +366,7 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax)
     for (auto& rawEventsItem : _rawThreadMap) {
         auto& rawEvents = rawEventsItem.second;
 
+        auto root = Node::CreateTree(std::move(rawEvents));
         auto events = Event::Create(std::move(rawEvents));
         threadEvents.push_back(std::move(events));
     }
@@ -387,6 +389,8 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax)
             threadEvents[mainThreadId] = other;
         }
     }
+
+
 
     std::vector< std::list<EventAcc> > threadAccums;
     for (auto& events : threadEvents) {

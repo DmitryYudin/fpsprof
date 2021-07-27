@@ -235,7 +235,7 @@ std::list<EventAcc> EventAcc::Create(std::list<Event>&& events)
     while (!events.empty()) {
         auto& event = events.front();
         if(0 == strcmp(event.name(), "CompressCtu_InterRecur")) {
-            __debugbreak();
+            //__debugbreak();
         }
 
         auto it = std::find_if(accums.begin(), accums.end(),

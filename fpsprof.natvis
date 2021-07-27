@@ -9,4 +9,58 @@
   <Type Name="fpsprof::fastwrite_storage_t&lt;*&gt;">
     <DisplayString> size={ _next_idx } _reading={ _reading } </DisplayString>
   </Type>
+    <Type Name="fpsprof::Node">
+        <DisplayString> { _stack_level }/{ _stack_pos }/{ _children._Mypair._Myval2._Mysize } { _name,s }</DisplayString>
+        <Expand>
+            
+            <LinkedListItems>
+                <Size>          _children._Mypair._Myval2._Mysize           </Size>
+                <HeadPointer>   _children._Mypair._Myval2._Myhead-&gt;_Next </HeadPointer>
+                <!-- The debugger evaluates the NextPointer and ValueNode expressions in the context of the LinkedListItems node element, not the parent list type. -->
+                <NextPointer>   _Next                             </NextPointer>
+                <ValueNode>     _Myval                            </ValueNode>
+            </LinkedListItems>
+        </Expand>
+    </Type>
+
+    <Type Name="fpsprof::Tree">
+        <DisplayString> { _stack_level }/{ _stack_pos }/{ _children._Mypair._Myval2._Mysize } { _name,s }</DisplayString>
+        <Expand>
+
+            <LinkedListItems>
+                <Size>          _children._Mypair._Myval2._Mysize           </Size>
+                <HeadPointer>   _children._Mypair._Myval2._Myhead-&gt;_Next </HeadPointer>
+                <!-- The debugger evaluates the NextPointer and ValueNode expressions in the context of the LinkedListItems node element, not the parent list type. -->
+                <NextPointer>   _Next                             </NextPointer>
+                <ValueNode>     _Myval                            </ValueNode>
+            </LinkedListItems>
+        </Expand>
+    </Type>    
+    <!--
+                                        		   _children._Mypair._Myval2._Mysize
+     { _children._Mysize } 
+      <DisplayString>{{ size={_children._Mysize} }}</DisplayString>
+    wdwqd
+    
+    <Item Name="[allocator]" ExcludeView="simple">_children._Mypair</Item>
+      <Expand>
+          <Item Name="[allocator]" ExcludeView="simple">_Mypair</Item>
+          <LinkedListItems>
+              <Size>_Mypair._Myval2._Mysize</Size>
+              <HeadPointer>_Mypair._Myval2._Myhead-&gt;_Next</HeadPointer>
+              <NextPointer>_Next</NextPointer>
+              <ValueNode>_Myval</ValueNode>
+          </LinkedListItems>
+      </Expand>
+
+.natvisreload 
+
+
+              <HeadPointer>_children._Mypair._Myval2._Myhead-&gt;_children._Next</HeadPointer>
+              <NextPointer>_children._Next</NextPointer>
+              <ValueNode>_children._Myval</ValueNode>
+              
+              
+
+    -->
 </AutoVisualizer>

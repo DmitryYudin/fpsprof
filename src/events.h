@@ -44,7 +44,8 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const RawEvent& event);
     char* desirialize(char* s); // ~= strtok, returns NULL on failure
 
-protected:
+//protected:
+public:
     std::string make_hash() const {
         std::string name;
 #ifdef NDEBUG
@@ -62,7 +63,7 @@ protected:
             + std::to_string((int)_frame_flag) + "."
             + std::to_string((int)_measure_process_time);
     }
-
+protected:
     const char* _name;
     int _stack_level;
     bool _frame_flag;
