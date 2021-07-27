@@ -50,10 +50,10 @@ int main(int argc, char *argv[])
         { "help",   no_argument,        0, 'h' },
         { "input",  required_argument,  0, 'i' },
         { "report", required_argument,  0, 'r' },
-        { "stack",  required_argument,  0, 's' },
+        //{ "stack",  required_argument,  0, 's' },
     };
     const char* filename = NULL;
-    int ch, reportFlags = 0xff, stackLevelMax = -1;
+    int ch, reportFlags = 0xff;
     while ((ch = getopt_long(argc, argv, "hi:r:s:", long_options, 0)) != EOF) {
         switch (ch) {
         case 'h':
@@ -66,11 +66,11 @@ int main(int argc, char *argv[])
                 TRACE_ERR(1, "invalid argument for '-r' option: %s", optarg)
             }
             break;
-        case 's':
-            if (sscanf(optarg, "%u", &stackLevelMax) != 1) {
-                TRACE_ERR(1, "invalid argument for '-s' option: %s", optarg)
-            }
-            break;
+        //case 's':
+        //    if (sscanf(optarg, "%u", &stackLevelMax) != 1) {
+        //        TRACE_ERR(1, "invalid argument for '-s' option: %s", optarg)
+        //    }
+        //    break;
 
         default:
             usage();
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
     fpsprof::Reporter reporter;
     TRACE_ERR(!reporter.Deserialize(filename), "failed to parse proliler log: %s", filename)
 
-    std::string report = reporter.Report(reportFlags, stackLevelMax);
+    std::string report = reporter.Report(reportFlags);
     printf("%s\n", report.c_str());
 
     return 0;

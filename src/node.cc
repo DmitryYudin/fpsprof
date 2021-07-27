@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include "node.h"
 #include "events.h"
 
@@ -51,36 +53,41 @@ Node& Node::add_child(const RawEvent& rawEvent)
     _children.emplace_back(rawEvent, *this);
     return _children.back();
 }
-void Node::merge(Node&& node)
+void Node::merge_self(Node&& node)
 {
     assert(_name == node.name());
     assert(_stack_level == node.stack_level());
+    assert(_frame_flag == node.frame_flag());
+    assert(1 == node.count());
     _realtime_used += node.realtime_used();
     _cpu_used += node.cpu_used();
-    _count += 1;
+    _count += node.count();
     assert(_parent_path == node.parent_path());
     assert(_self_path == node.self_path());
-    _children.splice(_children.begin(), std::move(node._children));
+    _children.splice(_children.end(), std::move(node._children));
 }
 
-void Node::merge_stack_level()
+void Node::merge_children()
 {
-    auto &it = _children.begin();
-    while(it != _children.end()) {
-        auto next = it; next++;
-        const char* name = it->name();
-        auto it2 = std::find_if(next, _children.end(),
-            [name](const Node& child) { return name == child.name(); }
-        );
-        if( it2 == _children.end()) {
-            it++;
-        } else {
-            it->merge(std::move(*it2));
-            _children.erase(it2);
-        }
-    } 
+    // printf("merge_children: %10u %s\n", (unsigned)_children.size(), _name);
 
-    std::for_each(_children.begin(), _children.end(), [](Node& child) { child.merge_stack_level(); });
+    auto it = _children.begin();
+    while(it != _children.end()) {
+        const char* name = it->name();
+        auto cand = it; cand++;
+        while( cand != _children.end() ) {
+            if(name != cand->name()) {
+                cand++;
+            } else {
+                it->merge_self(std::move(*cand));
+                cand = _children.erase(cand);
+            }
+        }
+        it++;
+    } 
+    for(auto& child: _children) {
+        child.merge_children();
+    }
 }
 
 Node Node::CreateTree(std::list<RawEvent>&& rawEvents)
@@ -100,26 +107,32 @@ Node Node::CreateTree(std::list<RawEvent>&& rawEvents)
         rawEvents.pop_front();
     }
 
-    root.merge_stack_level();
-    /*
-    auto &it = root._children.begin();
-    while(it != )
-    for(auto &it = root._children.begin(); it != root._children.end(); it++) {
+    root.merge_children();
 
+    root._frame_flag = std::any_of(root.children().begin(), root.children().end(), [](const Node& child) { return child.frame_flag(); });
+
+    if(root._frame_flag && root.children().size() > 1) {
+        throw std::runtime_error("frame thread must have only one entry point");
     }
-    */
-
-/*
-
-        auto it = std::find_if(accums.begin(), accums.end(),
-            [&event](const EventAcc& eventAcc) {
-            return eventAcc.parent_path() == event.parent_path()
-                && eventAcc.name() == event.name()
-                && eventAcc.stack_pos() == event.stack_pos();
-            }
-        );
-*/
     return root;
+}
+
+
+unsigned Node::name_len_max() const
+{
+    unsigned n = (unsigned)strlen(_name);
+    for (const auto& child : _children) {
+        n = std::max(n, child.name_len_max());
+    }
+    return n;
+}
+unsigned Node::stack_level_max() const
+{
+    unsigned n = std::max(0, _stack_level);
+    for (const auto& child : _children) {
+        n = std::max(n, child.stack_level_max());
+    }
+    return n;
 }
 
 }

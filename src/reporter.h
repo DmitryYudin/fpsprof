@@ -28,7 +28,7 @@ public:
     void AddProfPoints(std::list<ProfPoint>&& marks);
 
     // one-shot (destroy data on return)
-    std::string Report(int reportFlags, int stackLevelMax = -1);
+    std::string Report(int reportFlags);
 
 private:
     std::map<int, std::list<RawEvent> > _rawThreadMap;

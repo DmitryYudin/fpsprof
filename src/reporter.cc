@@ -103,7 +103,7 @@ void Reporter::AddProfPoints(std::list<ProfPoint>&& marks)
 static
 void print_header(std::ostream& os, const std::string& header, unsigned nameLenMax)
 {
-    const std::string delim = std::string(nameLenMax + 51, '-');
+    const std::string delim = std::string(nameLenMax + 55, '-');
     os << delim << std::endl;
     os << header << std::endl;
     os << delim << std::endl;
@@ -121,30 +121,30 @@ void print_header(std::ostream& os, const std::string& header, unsigned nameLenM
 
 struct PrettyName // unsafe
 {
-    static const char* name(const EventAcc& accum) // unsafe
+    static const char* name(const Node& node) // unsafe
     {
-        unsigned n = PrettyName::fill_size(accum);
+        unsigned n = PrettyName::fill_size(node.stack_level());
         memset(_name, ' ', n);
-        strcpy(_name + n, accum.name());
+        strcpy(_name + n, node.name());
 
-        if (accum.num_recursions()) {
-            sprintf(_name + strlen(_name), "[x%u]", accum.num_recursions());
-        }
+        //if (node.num_recursions()) {
+        //    sprintf(_name + strlen(_name), "[x%u]", node.num_recursions());
+        //}
         return _name;
     }
-    static unsigned name_size(const EventAcc& accum) {
+    static unsigned name_size(unsigned name_len, unsigned stack_level) {
         unsigned recur_size = 0;
-        if (accum.num_recursions()) {
-            recur_size = 1 + (unsigned)LOG10(accum.num_recursions()); // rare case
-            recur_size += 3; // "[x%u] "
-        }
-        unsigned n = PrettyName::fill_size(accum);
-        return n + (unsigned)strlen(accum.name()) + recur_size;
+        //if (node.num_recursions()) {
+        //    recur_size = 1 + (unsigned)LOG10(node.num_recursions()); // rare case
+        //    recur_size += 3; // "[x%u] "
+        //}
+        unsigned n = PrettyName::fill_size(stack_level);
+        return n + name_len + recur_size;
     }
 
 private:
-    static unsigned fill_size(const EventAcc& accum) {
-        unsigned stack_fill_width = std::min(128, 2 * (1 + accum.stack_level()));
+    static unsigned fill_size(unsigned stack_level) {
+        unsigned stack_fill_width = std::min(128u, 2 * (1 + stack_level));
         return stack_fill_width;
     }
     static char _name[1024];
@@ -154,24 +154,24 @@ char PrettyName::_name[];
 static
 void print_event(
     std::ostream& os,
-    const EventAcc& frameTop,
-    const EventAcc& accum,
+    const Node& frameTop,
+    const Node& node,
     int nameLenMax
 )
 {
-    const char* name = PrettyName::name(accum);
+    const char* name = PrettyName::name(node);
     const char* NA = "-";
 
     double cpuFreqMHz = 2800; // 2.8 GHz
     char totInclP[32], totExclP[32], totInclFPS[32], totInclMHzPerFrame[32], totExclMHzPerFrame[32];
-    if (frameTop.realtime_used_sum() > 0) {
-        double fpsHead = 1.f / (1e-9f * frameTop.realtime_used_avg());
-        double inclP = 100.f * accum.realtime_used_sum() / frameTop.realtime_used_sum();
-        double chldP = 100.f * accum.children_realtime_used_sum() / frameTop.realtime_used_sum();
+    if (frameTop.realtime_used() > 0) {
+        double fpsHead = 1.f / (1e-9f * (frameTop.realtime_used() / frameTop.count()) );
+        double inclP = 100.f * node.realtime_used() / frameTop.realtime_used();
+        double chldP = 100.f * node.children_realtime_used() / frameTop.realtime_used();
         double exclP = inclP - chldP;
         double inclMHzPerFrame = inclP / 100.f * cpuFreqMHz / fpsHead;
         double exclMHzPerFrame = exclP / 100.f * cpuFreqMHz / fpsHead;
-        double inclFPS = 1.f / (1e-9f * accum.realtime_used_sum() / frameTop.count());
+        double inclFPS = 1.f / (1e-9f * node.realtime_used() / frameTop.count());
         sprintf(totInclP, "%6.2f", inclP);
         sprintf(totExclP, "%6.2f", exclP);
         sprintf(totInclMHzPerFrame, "%9.1f", inclMHzPerFrame);
@@ -186,10 +186,10 @@ void print_event(
     }
 
     char selfInclP[32], selfExclP[32], selfInclFPS[32], selfExclFPS[32];
-    if (accum.realtime_used_avg() > 0) {
-        double fpsHead = 1 / (1e-9f * accum.realtime_used_avg());
-        double inclP = 100. * accum.realtime_used_avg() / accum.realtime_used_avg(); // 100%
-        double chldP = 100. * accum.children_realtime_used_avg() / accum.realtime_used_avg();
+    if (node.realtime_used() > 0) {
+        double fpsHead = 1 / (1e-9f * (node.realtime_used() / node.count()) );
+        double inclP = 100. * node.realtime_used() / node.realtime_used(); // 100%
+        double chldP = 100. * node.children_realtime_used() / node.realtime_used();
         double exclP = inclP - chldP;
         double inclFPS = inclP / 100. * fpsHead;
         double exclFPS = exclP / 100. * fpsHead;
@@ -205,14 +205,14 @@ void print_event(
     }
     char numCalls[32];
     if(frameTop.count() > 0) {
-        double n = ((double)accum.count()) / frameTop.count();
+        double n = ((double)node.count()) / frameTop.count();
         sprintf(numCalls, "%7.2f", n);
     } else {
         sprintf(numCalls, "%7s", NA);
     }
     char cpuP[64];
-    if (accum.realtime_used_sum() > 0) {
-        double inclP = 100.f* accum.cpu_used_sum()/ accum.realtime_used_sum();
+    if (node.realtime_used() > 0) {
+        double inclP = 100.f* node.cpu_used()/ node.realtime_used();
         sprintf(cpuP, "%6.1f", inclP);
     } else {
         sprintf(cpuP, "%6.1f", 0.);
@@ -221,13 +221,13 @@ void print_event(
     char s[2048];
 #if 0
     fprintf(s, "%3d %-*s %s (%s) %s (%s) %s %s %s\n", 
-        accum.stack_level(), nameLenMax, name, 
+        node.stack_level(), nameLenMax, name, 
         totInclMHzPerFrame, totInclP, totExclMHzPerFrame, totExclP,
         selfInclFPS, numCalls, cpuP
         );
 #else
     sprintf(s, "%3d %-*s %s %s %s %s %s %s\n",
-        accum.stack_level(), nameLenMax, name,
+        node.stack_level(), nameLenMax, name,
         totInclP, totExclP, totInclFPS,
         selfInclFPS, numCalls, cpuP
     );
@@ -238,58 +238,19 @@ void print_event(
 static
 void print_tree(
     std::ostream& os,
-    const EventAcc& frameTop,
-    const std::list<EventAcc>::const_iterator& begin,
-    const std::list<EventAcc>::const_iterator& end,
+    const Node& frameTop,
+    const Node& node,
     int stackLevelMax,
     int nameWidth)
 {
-    if (begin == end) {
-        return;
-    }
-    const EventAcc& parent = *begin;
-    print_event(os, frameTop, parent, nameWidth);
+    print_event(os, frameTop, node, nameWidth);
 
-    if (parent.stack_level() >= stackLevelMax) {
+    if (node.stack_level() >= stackLevelMax) {
         return;
     }
 
-    // Due to merge procedure, we may have multiple items shared same stack position.
-    //   foo               foo        Some stack positions may disappear.
-    //     \bar-1            \bar-1   We can only loop to num_children_max() to
-    //   foo     => merge =>  bar-2   find all childrens in a list.
-    //     \bar-2
-    std::vector<std::list<EventAcc>::const_iterator> children;
-    {
-        if(parent.stack_level() == 9 && 0 == strcmp(parent.name(), "CompressCtu_InterRecur")) {
-   //         __debugbreak();
-        }
-        
-        for(unsigned stack_pos = 0; stack_pos < parent.num_children_max(); stack_pos++) {
-            auto child_begin = begin;
-            while (true) {
-                const auto& it = std::find_if(child_begin, end,
-                    [&parent, stack_pos](const EventAcc& eventAcc) {
-                        return eventAcc.parent_path() == parent.self_path()
-                            && eventAcc.stack_pos() == stack_pos;
-                    }
-                );
-                if (it == end) {
-                    break;
-                } else {
-                    children.push_back(it);
-                    child_begin = it;
-                }
-                child_begin++;
-            }
-        }
-    }
-
-    for (unsigned idx = 0; idx < children.size(); idx++) {
-        const auto& child_begin = children[idx];
-        const auto& child_end = idx + 1 < children.size() ? children[idx+1] : end;
-//const auto& child_end = end;
-        print_tree(os, frameTop, child_begin, child_end, stackLevelMax, nameWidth);
+    for(auto& child: node.children()) {
+        print_tree(os, frameTop, child, stackLevelMax, nameWidth);
     }
 }
 
@@ -297,20 +258,22 @@ static
 void print_threads(
     std::ostream& os,
     int reportType,
-    const std::vector< std::list<EventAcc> >& threadAccums,
+    const std::vector< Node >& threads,
     int stackLevelMax,
     int nameWidth
 )
 {
     std::string header;
     {
-        std::string numThreads = std::to_string(threadAccums.size());
+        std::string numThreads = std::to_string(threads.size());
         switch (reportType) {
             case REPORT_THREAD_ROOT:
                 header = std::string("Threads summary");
+                stackLevelMax = 0;
                 break;
             case REPORT_STACK_TOP:
                 header = std::string("Stack top");
+                stackLevelMax = 0;
                 break;
             case REPORT_SUMMARY_NO_REC:
                 header = "Summary report (no recursion)";
@@ -322,59 +285,36 @@ void print_threads(
                 header = "Detailed report";
                 break;
         }
-        header += std::string(" [ ") + std::to_string(threadAccums.size()) + " thread(s) ]";
+        header += std::string(" [ ") + std::to_string(threads.size()) + " thread(s) ]";
     }
     print_header(os, header, nameWidth);
 
-    const EventAcc& frameTop = threadAccums[0].front();
-    for (size_t threadId = 0; threadId < threadAccums.size(); threadId++) {
-        const auto& accums = threadAccums[threadId];
-
-        RootAcc *rootAcc = RootAcc::Create(accums, (unsigned)threadId);
-        if (rootAcc) {
-            print_event(os, frameTop, *rootAcc, nameWidth);
-        }
-        if (reportType == REPORT_THREAD_ROOT) {
-            continue;
-        }
-
-        if (reportType == REPORT_STACK_TOP) {
-            stackLevelMax = 0;
-        }
-        // Top-level may have no root. Here we gather all items with stack_level == 0
-        std::vector<std::list<EventAcc>::const_iterator> roots;
-        for (auto it = accums.begin(); it != accums.end(); it++) {
-            const EventAcc& eventAcc = *it;
-            if (eventAcc.stack_level() == 0) {
-                roots.push_back(it);
-            }           
-        }
-        assert(roots.size() > 0);
-
-        for (size_t i = 0; i < roots.size(); i++) {
-            const auto& begin = roots[i];
-            const auto& end = i + 1 < roots.size() ? roots[i + 1] : accums.end();
-            print_tree(os, frameTop, begin, end, stackLevelMax, nameWidth);
+    if( threads[0].children().size() == 0 ) {
+        return;
+    }
+    const Node& frameTop = threads[0].children().front();
+    for (size_t threadId = 0; threadId < threads.size(); threadId++) {
+        for(auto& node : threads[threadId].children()) {
+            print_tree(os, frameTop, node, stackLevelMax, nameWidth);
         }
     }
+
     os << std::endl;
 }
 
-std::string Reporter::Report(int reportFlags, int stackLevelMax)
+std::string Reporter::Report(int reportFlags)
 {
-    std::vector< std::list<Event> > threadEvents;
+    std::vector< Node > threads;
     for (auto& rawEventsItem : _rawThreadMap) {
         auto& rawEvents = rawEventsItem.second;
 
         auto root = Node::CreateTree(std::move(rawEvents));
-        auto events = Event::Create(std::move(rawEvents));
-        threadEvents.push_back(std::move(events));
+        threads.push_back(std::move(root));
     }
     {
         int mainThreadId = -1;
-        for(size_t threadId = 0; threadId < threadEvents.size(); threadId++) {
-            const auto& head = threadEvents[threadId].front();
-            if (head.frame_flag()) {
+        for(size_t threadId = 0; threadId < threads.size(); threadId++) {
+            if (threads[threadId].frame_flag()) {
                 mainThreadId = (unsigned)threadId;
                 break;
             }
@@ -383,15 +323,44 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax)
             return "";
         }
         if (mainThreadId != 0) { // set to mt_id = 0
-            auto other = std::move(threadEvents[0]);
-            auto main = std::move(threadEvents[mainThreadId]);
-            threadEvents[0] = main;
-            threadEvents[mainThreadId] = other;
+            auto other = std::move(threads[0]);
+            auto main = std::move(threads[mainThreadId]);
+            threads[0] = main;
+            threads[mainThreadId] = other;
         }
     }
 
+    unsigned nameWidth = 0;
+    unsigned stackLevelMax = 0;
+    {
+        for (const auto& node : threads) {
+            stackLevelMax = std::max(stackLevelMax, node.stack_level_max());
+            nameWidth = std::max(nameWidth, PrettyName::name_size(node.name_len_max(), stackLevelMax));
+        }
+        stackLevelMax += 1;
+    }
 
+#define DEBUG_REPORT 1
+#if DEBUG_REPORT
+    std::ostream& ss = std::cout;
+#else
+    std::stringstream ss;
+#endif
 
+    if (reportFlags & REPORT_THREAD_ROOT) {
+        print_threads(ss, REPORT_THREAD_ROOT, threads, stackLevelMax, nameWidth);
+    }
+    if (reportFlags & REPORT_DETAILED) {
+        print_threads(ss, REPORT_DETAILED, threads, stackLevelMax, nameWidth);
+    }
+
+#if DEBUG_REPORT
+    return "We're maintaining. Keep calm and don't panic.";
+#else
+    return ss.str();
+#endif
+
+    /*
     std::vector< std::list<EventAcc> > threadAccums;
     for (auto& events : threadEvents) {
         auto accums = EventAcc::Create(std::move(events));
@@ -410,51 +379,15 @@ std::string Reporter::Report(int reportFlags, int stackLevelMax)
         threadSummaryNoRec.push_back(std::move(summaryNoRec));
     }
     
-    unsigned nameWidth = 0;
-    {
-        int stackLevelMax_ = 0;
-        for (const auto& accums : threadAccums) {
-            int stackLevel = 0;
-            for (const auto& accum : accums) {
-                stackLevel = std::max(stackLevel, accum.stack_level());
-                nameWidth = std::max(nameWidth, PrettyName::name_size(accum));
-            }
-            stackLevelMax_ = std::max(stackLevelMax_, stackLevel);
-        }
-        stackLevelMax_ += 1;
-        if (stackLevelMax < 0) {
-            stackLevelMax = stackLevelMax_;
-        } else {
-            stackLevelMax = std::min(stackLevelMax, stackLevelMax_);
-        }
-    }
 
-#define DEBUG_REPORT 1
-#if DEBUG_REPORT
-    std::ostream& ss = std::cout;
-#else
-    std::stringstream ss;
-#endif
-    if (reportFlags & REPORT_THREAD_ROOT) {
-        print_threads(ss, REPORT_THREAD_ROOT, threadSummary, stackLevelMax, nameWidth);
-    }
-    if (reportFlags & REPORT_STACK_TOP) {
-        print_threads(ss, REPORT_STACK_TOP, threadSummary, stackLevelMax, nameWidth);
-    }
     if (reportFlags & REPORT_SUMMARY_NO_REC) {
         print_threads(ss, REPORT_SUMMARY_NO_REC, threadSummaryNoRec, stackLevelMax, nameWidth);
     }
     if (reportFlags & REPORT_SUMMARY) {
         print_threads(ss, REPORT_SUMMARY, threadSummary, stackLevelMax, nameWidth);
     }
-    if (reportFlags & REPORT_DETAILED) {
-        print_threads(ss, REPORT_DETAILED, threadAccums, stackLevelMax, nameWidth);
-    }
-#if DEBUG_REPORT
-    return "We're maintaining. Keep calm and don't panic.";
-#else
-    return ss.str();
-#endif
+*/
+    return "";
 }
 
 }

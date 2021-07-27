@@ -16,6 +16,7 @@ public:
 
     const char* name() const { return _name; }
     int stack_level() const { return _stack_level; }
+    bool frame_flag() const { return _frame_flag; }
     bool measure_process_time() const { return _measure_process_time; }
     unsigned num_children() const { return (unsigned)_children.size(); }
     
@@ -23,11 +24,19 @@ public:
     uint64_t cpu_used() const { return _cpu_used; }
     const std::string& parent_path() const { return _parent_path; }
     const std::string& self_path() const { return _self_path; }
+    unsigned count() const { return _count; }
+    const std::list<Node>& children() const { return _children; }
+
+    unsigned name_len_max() const;
+    unsigned stack_level_max() const;
+
+    //uint64_t realtime_used_avg() const { return _realtime_used / _count; }
+    uint64_t children_realtime_used() const { uint64_t n = 0; for(auto& child : _children) { n += child.realtime_used(); } return n;}
 
 protected:
     Node& add_child(const RawEvent& rawEvent);
-    void merge_stack_level();
-    void merge(Node&& node);
+    void merge_children();
+    void merge_self(Node&& node);
 
 private:
     const char* _name;
