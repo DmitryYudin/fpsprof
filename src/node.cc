@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2021 Dmitry Yudin. All rights reserved.
+ * Licensed under the Apache License, Version 2.0
+ */
+
 #define NOMINMAX
 
 #include "node.h"
@@ -24,9 +29,10 @@ Node::Node()
     , _stack_pos(0)
     , _parent(NULL)
     , _count(1)
+    , _num_recursions(0)
 {
 }
-Node::Node(const RawEvent& rawEvent, const Node& parent)
+Node::Node(const RawEvent& rawEvent, Node& parent)
     : _name(rawEvent.name())
     , _stack_level(rawEvent.stack_level())
     , _frame_flag(rawEvent.frame_flag())
@@ -38,6 +44,7 @@ Node::Node(const RawEvent& rawEvent, const Node& parent)
     , _stack_pos(parent.num_children())
     , _parent(&parent)
     , _count(1)
+    , _num_recursions(0)
 {
 }
 
@@ -59,11 +66,15 @@ void Node::merge_self(Node&& node)
     assert(_stack_level == node.stack_level());
     assert(_frame_flag == node.frame_flag());
     assert(1 == node.count());
+    assert(0 == node.num_recursions());
+
     _realtime_used += node.realtime_used();
     _cpu_used += node.cpu_used();
     _count += 1;
+
     assert(_parent_path == node.parent_path());
     assert(_self_path == node.self_path());
+
     _children.splice(_children.end(), std::move(node._children));
 }
 
@@ -88,14 +99,52 @@ void Node::merge_children()
     }
 }
 
-void Node::update_counters()
+Node Node::deep_copy(Node* parent)
 {
-    if(_parent) {
-        _count *= _parent->count();
-    }
+    Node node = Node();
+
+    node._name = _name;
+    node._stack_level = _stack_level;
+    node._frame_flag = _frame_flag;
+    node._measure_process_time = _measure_process_time;
+
+    node._realtime_used = _realtime_used;
+    node._cpu_used = _cpu_used;
+    node._parent_path = _parent_path;
+    node._self_path = _self_path;
+    node._stack_pos = _stack_pos;
+
+    node._parent = parent;
+    node._count = _count;
+    node._num_recursions = _num_recursions;
     for(auto& child: _children) {
-        child.update_counters();
+        node._children.push_back(child.deep_copy(&node));
     }
+
+    return node;
+}
+
+bool Node::collapse_recursion()
+{
+    for(auto it = _children.begin(); it != _children.begin(); ) {
+        if( it->collapse_recursion() ) { // child can modify us and add more items at the end of a '_children' list
+            it = _children.erase(it);
+        } else {
+            it++;
+        }
+    }
+    Node *parent = _parent;
+    while(parent) {
+        if(parent->name() == _name) {
+            parent->_count += _count;
+            parent->_num_recursions += 1;
+            _children.splice(parent->_children.end(), std::move(_children));
+            return true;
+        } else {
+            parent = parent->_parent;
+        }
+    }
+    return false;
 }
 
 Node Node::CreateTree(std::list<RawEvent>&& rawEvents)
@@ -116,13 +165,15 @@ Node Node::CreateTree(std::list<RawEvent>&& rawEvents)
     }
 
     root.merge_children();
-  //root.update_counters();
-
     root._frame_flag = std::any_of(root.children().begin(), root.children().end(), [](const Node& child) { return child.frame_flag(); });
-
     if(root._frame_flag && root.children().size() > 1) {
         throw std::runtime_error("frame thread must have only one entry point");
     }
+
+    Node norec = root.deep_copy(NULL);
+
+    norec.collapse_recursion();
+
     return root;
 }
 

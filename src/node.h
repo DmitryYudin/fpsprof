@@ -1,5 +1,10 @@
+/*
+ * Copyright © 2021 Dmitry Yudin. All rights reserved.
+ * Licensed under the Apache License, Version 2.0
+ */
 #pragma once
 
+#include <stdint.h>
 #include <list>
 #include <string>
 
@@ -12,7 +17,7 @@ public:
     static Node CreateTree(std::list<RawEvent>&& rawEvents);
 
     Node();
-    Node(const RawEvent& rawEvent, const Node& parent);
+    Node(const RawEvent& rawEvent, Node& parent);
     Node(const Node&) = delete;
     Node(Node&&) = default;
     Node& operator= (Node&) = delete;
@@ -28,20 +33,23 @@ public:
     uint64_t cpu_used() const { return _cpu_used; }
     const std::string& parent_path() const { return _parent_path; }
     const std::string& self_path() const { return _self_path; }
+    const Node *parent() const { return _parent; }
     unsigned count() const { return _count; }
+    unsigned num_recursions() const { return _num_recursions; }
     const std::list<Node>& children() const { return _children; }
 
     unsigned name_len_max() const;
     unsigned stack_level_max() const;
 
-    //uint64_t realtime_used_avg() const { return _realtime_used / _count; }
-    uint64_t children_realtime_used() const { uint64_t n = 0; for(auto& child : _children) { n += child.realtime_used(); } return n;}
+    uint64_t children_realtime_used() const { uint64_t n = 0; for(auto& child : _children) { n += child.realtime_used(); } return n; }
 
 protected:
     Node& add_child(const RawEvent& rawEvent);
     void merge_children();
     void merge_self(Node&& node);
-    void update_counters();
+
+    Node deep_copy(Node* parent);
+    bool collapse_recursion();
 
 private:
     const char* _name;
@@ -55,10 +63,10 @@ private:
     std::string _self_path;
     unsigned _stack_pos;
 
-    const Node *_parent;
+    Node *_parent;
     unsigned _count;
+    unsigned _num_recursions;
     std::list<Node> _children;
 };
-
 
 }
