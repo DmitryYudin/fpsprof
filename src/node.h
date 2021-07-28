@@ -13,6 +13,10 @@ public:
 
     Node();
     Node(const RawEvent& rawEvent, const Node& parent);
+    Node(const Node&) = delete;
+    Node(Node&&) = default;
+    Node& operator= (Node&) = delete;
+    Node& operator= (Node&&) = default;
 
     const char* name() const { return _name; }
     int stack_level() const { return _stack_level; }
@@ -37,6 +41,7 @@ protected:
     Node& add_child(const RawEvent& rawEvent);
     void merge_children();
     void merge_self(Node&& node);
+    void update_counters();
 
 private:
     const char* _name;

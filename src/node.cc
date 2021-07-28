@@ -61,7 +61,7 @@ void Node::merge_self(Node&& node)
     assert(1 == node.count());
     _realtime_used += node.realtime_used();
     _cpu_used += node.cpu_used();
-    _count += node.count();
+    _count += 1;
     assert(_parent_path == node.parent_path());
     assert(_self_path == node.self_path());
     _children.splice(_children.end(), std::move(node._children));
@@ -69,8 +69,6 @@ void Node::merge_self(Node&& node)
 
 void Node::merge_children()
 {
-    // printf("merge_children: %10u %s\n", (unsigned)_children.size(), _name);
-
     auto it = _children.begin();
     while(it != _children.end()) {
         const char* name = it->name();
@@ -87,6 +85,16 @@ void Node::merge_children()
     } 
     for(auto& child: _children) {
         child.merge_children();
+    }
+}
+
+void Node::update_counters()
+{
+    if(_parent) {
+        _count *= _parent->count();
+    }
+    for(auto& child: _children) {
+        child.update_counters();
     }
 }
 
@@ -108,6 +116,7 @@ Node Node::CreateTree(std::list<RawEvent>&& rawEvents)
     }
 
     root.merge_children();
+  //root.update_counters();
 
     root._frame_flag = std::any_of(root.children().begin(), root.children().end(), [](const Node& child) { return child.frame_flag(); });
 

@@ -323,10 +323,7 @@ std::string Reporter::Report(int reportFlags)
             return "";
         }
         if (mainThreadId != 0) { // set to mt_id = 0
-            auto other = std::move(threads[0]);
-            auto main = std::move(threads[mainThreadId]);
-            threads[0] = main;
-            threads[mainThreadId] = other;
+            std::swap(threads[0], threads[mainThreadId]);
         }
     }
 
