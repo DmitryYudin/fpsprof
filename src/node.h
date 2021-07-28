@@ -14,7 +14,8 @@ class RawEvent;
 
 class Node {
 public:
-    static Node CreateTree(std::list<RawEvent>&& rawEvents);
+    static Node* CreateFull(std::list<RawEvent>&& rawEvents);
+    static Node* CreateNoRecur(const Node& root);
 
     Node();
     Node(const RawEvent& rawEvent, Node& parent);
@@ -45,11 +46,14 @@ public:
 
 protected:
     Node& add_child(const RawEvent& rawEvent);
-    void merge_children();
-    void merge_self(Node&& node);
+    void merge_children(bool strict);
+    void merge_self(Node&& node, bool strict);
 
-    Node deep_copy(Node* parent);
+    Node* deep_copy(Node* parent) const;
+    static void rebase_children(const Node* newHead, Node& oldHead);
+
     bool collapse_recursion();
+    void update_stack_level();
 
 private:
     const char* _name;
@@ -61,12 +65,14 @@ private:
     uint64_t _cpu_used;
     std::string _parent_path;
     std::string _self_path;
-    unsigned _stack_pos;
+    //unsigned _stack_pos;
 
     Node *_parent;
     unsigned _count;
     unsigned _num_recursions;
     std::list<Node> _children;
+
+
 };
 
 }

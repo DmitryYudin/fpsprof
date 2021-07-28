@@ -14,9 +14,18 @@ class Node;
 
 class Stat {
 public:
-    static std::list<Stat> CollectStatistics(const Node& node);
+    static std::list<Stat*> CollectStatistics(const Node& node);
 
     Stat(const Node& node);
+
+#if _MSC_VER // Microsofts STL library can't move list< Stat > using only rvalue reference, i.e. there is no 'operator= (std::list<T&&> &&)' available
+    Stat(const Stat&) = default;
+#else
+    Stat(const Stat&) = delete;
+#endif
+    Stat(Stat&&) = default;
+    Stat& operator= (Stat&) = delete;
+    Stat& operator= (Stat&&) = default;
 
     const char* name() const { return _name; }
     int stack_level_min() const { return _stack_level_min; }
@@ -31,12 +40,7 @@ public:
 
     void add_node(const Node& node);
 
-protected:
-    //void collect_statistics(std::list<Stat>& stats);
-
 private:
-    Stat(const Stat&) = delete;
-
     const char* _name;
     int _stack_level_min;
     bool _measure_process_time;

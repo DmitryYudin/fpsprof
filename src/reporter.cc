@@ -6,6 +6,8 @@
 #define NOMINMAX
 #include "reporter.h"
 #include "node.h"
+#include "stat.h"
+
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -127,16 +129,16 @@ struct PrettyName // unsafe
         memset(_name, ' ', n);
         strcpy(_name + n, node.name());
 
-        //if (node.num_recursions()) {
-        //    sprintf(_name + strlen(_name), "[x%u]", node.num_recursions());
-        //}
+        if (node.num_recursions()) {
+            sprintf(_name + strlen(_name), "[+%u]", node.num_recursions());
+        }
         return _name;
     }
     static unsigned name_size(unsigned name_len, unsigned stack_level) {
         unsigned recur_size = 0;
         //if (node.num_recursions()) {
         //    recur_size = 1 + (unsigned)LOG10(node.num_recursions()); // rare case
-        //    recur_size += 3; // "[x%u] "
+        //    recur_size += 3; // "[+%u] "
         //}
         unsigned n = PrettyName::fill_size(stack_level);
         return n + name_len + recur_size;
@@ -258,7 +260,7 @@ static
 void print_threads(
     std::ostream& os,
     int reportType,
-    const std::vector< Node >& threads,
+    const std::vector< Node* >& threads,
     int stackLevelMax,
     int nameWidth
 )
@@ -289,12 +291,12 @@ void print_threads(
     }
     print_header(os, header, nameWidth);
 
-    if( threads[0].children().size() == 0 ) {
+    if( threads[0]->children().size() == 0 ) {
         return;
     }
-    const Node& frameTop = threads[0].children().front();
+    const Node& frameTop = threads[0]->children().front();
     for (size_t threadId = 0; threadId < threads.size(); threadId++) {
-        for(auto& node : threads[threadId].children()) {
+        for(auto& node : threads[threadId]->children()) {
             print_tree(os, frameTop, node, stackLevelMax, nameWidth);
         }
     }
@@ -302,37 +304,51 @@ void print_threads(
     os << std::endl;
 }
 
-std::string Reporter::Report(int reportFlags)
+void generate_reports(
+    std::map<int, std::list<RawEvent> >& rawThreadMap,
+    std::vector< Node* >& threadsFull,
+    std::vector< Node* >& threadsNoRecur,
+    std::vector< std::list<Stat*> >& funcStats
+)
 {
-    std::vector< Node > threads;
-    for (auto& rawEventsItem : _rawThreadMap) {
+    for (auto& rawEventsItem : rawThreadMap) {
         auto& rawEvents = rawEventsItem.second;
 
-        auto root = Node::CreateTree(std::move(rawEvents));
-        threads.push_back(std::move(root));
+        auto rootFull = Node::CreateFull(std::move(rawEvents));
+        auto rootNoRecur = Node::CreateNoRecur(*rootFull);
+        auto rootStat = Stat::CollectStatistics(*rootNoRecur);
+        threadsFull.push_back(rootFull);
+        threadsNoRecur.push_back(rootNoRecur);
+        funcStats.push_back(rootStat);
     }
-    {
-        int mainThreadId = -1;
-        for(size_t threadId = 0; threadId < threads.size(); threadId++) {
-            if (threads[threadId].frame_flag()) {
-                mainThreadId = (unsigned)threadId;
-                break;
-            }
-        }
-        if (mainThreadId == -1) {
-            return "";
-        }
-        if (mainThreadId != 0) { // set to mt_id = 0
-            std::swap(threads[0], threads[mainThreadId]);
+
+    int mainThreadId = -1;
+    for(size_t threadId = 0; threadId < threadsFull.size(); threadId++) {
+        if (threadsFull[threadId]->frame_flag()) {
+            mainThreadId = (unsigned)threadId;
+            break;
         }
     }
+    if (mainThreadId == -1) {
+        throw std::runtime_error("no main thread found");
+    }
+    if (mainThreadId != 0) { // set to mt_id = 0
+        std::swap(threadsFull[0], threadsFull[mainThreadId]);
+    }
+}
+
+std::string Reporter::Report(int reportFlags)
+{
+    std::vector< Node* > threadsFull, threadsNoRecur;
+    std::vector< std::list<Stat*> > funcStats;
+    generate_reports(_rawThreadMap, threadsFull, threadsNoRecur, funcStats);
 
     unsigned nameWidth = 0;
     unsigned stackLevelMax = 0;
     {
-        for (const auto& node : threads) {
-            stackLevelMax = std::max(stackLevelMax, node.stack_level_max());
-            nameWidth = std::max(nameWidth, PrettyName::name_size(node.name_len_max(), stackLevelMax));
+        for (const auto& node : threadsFull) {
+            stackLevelMax = std::max(stackLevelMax, node->stack_level_max());
+            nameWidth = std::max(nameWidth, PrettyName::name_size(node->name_len_max(), stackLevelMax));
         }
         stackLevelMax += 1;
     }
@@ -345,12 +361,15 @@ std::string Reporter::Report(int reportFlags)
 #endif
 
     if (reportFlags & REPORT_THREAD_ROOT) {
-        print_threads(ss, REPORT_THREAD_ROOT, threads, stackLevelMax, nameWidth);
+        print_threads(ss, REPORT_THREAD_ROOT, threadsFull, stackLevelMax, nameWidth);
     }
     if (reportFlags & REPORT_DETAILED) {
-        print_threads(ss, REPORT_DETAILED, threads, stackLevelMax, nameWidth);
+        print_threads(ss, REPORT_DETAILED, threadsFull, stackLevelMax, nameWidth);
     }
-
+    if (reportFlags & REPORT_DETAILED) {
+        print_threads(ss, REPORT_DETAILED, threadsNoRecur, stackLevelMax, nameWidth);
+    }
+    
 #if DEBUG_REPORT
     return "We're maintaining. Keep calm and don't panic.";
 #else

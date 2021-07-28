@@ -10,6 +10,7 @@
 
 #include "assert.h"
 #include <stdexcept>
+#include <algorithm>
 
 namespace fpsprof {
 
@@ -21,16 +22,16 @@ static void check_recursion(const Node& node)
         if(parent->name() == name) {
             throw std::runtime_error("recursion detected on statistics collection stage");
         }
-        parent = node.parent();
+        parent = parent->parent();
     }
 }
 
-static void check_stack_level(const std::list<Stat>& stats, const std::list<Node>& children)
+static void check_stack_level(const std::list<Stat*>& stats, const std::list<Node>& children)
 {
     for(auto& stat: stats) {
         int n = 0;
         for(auto& child : children) {
-            n += child.name() == stat.name() ? 1 : 0;
+            n += child.name() == stat->name() ? 1 : 0;
             if(n > 1) {
                 throw std::runtime_error("recursion detected on statistics collection stage");
             }
@@ -66,29 +67,39 @@ void Stat::add_node(const Node& node)
     _children_realtime_used += node.children_realtime_used();
 }
 
-static void collect_statistics(std::list<Stat>& stats, const Node& node)
+static void collect_statistics(std::list<Stat*>& stats, const Node& node)
 {
-    check_stack_level(stats, node.children());
+    //check_stack_level(stats, node.children());
 
+    auto it = std::find_if(stats.begin(), stats.end(), [&](const Stat* stat) {
+        return stat->name() == node.name();
+    });
+    if(it != stats.end()) {
+        (*it)->add_node(node);
+    } else {
+        stats.push_back(new Stat(node));
+    }
+    /*
     for(auto& child: node.children()) {
-        auto it = std::find_if(stats.begin(), stats.end(), [&](const Stat& stat) {
-            return stat.name() == child.name();
+        auto it = std::find_if(stats.begin(), stats.end(), [&](const Stat* stat) {
+            return stat->name() == child.name();
         });
         if(it != stats.end()) {
-            it->add_node(node);
+            (*it)->add_node(node);
         } else {
-            stats.emplace_back(child);
+            stats.push_back(new Stat(child));
         }
     }
+    */
     for(auto& child: node.children()) {
         collect_statistics(stats, child);
     }
 }
 
-std::list<Stat> Stat::CollectStatistics(const Node& node)
+std::list<Stat*> Stat::CollectStatistics(const Node& node)
 {
-    std::list<Stat> stats;
-    stats.emplace_back(node);
+    std::list<Stat*> stats;
+    stats.push_back(new Stat(node));
     
     collect_statistics(stats, node);
 

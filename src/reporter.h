@@ -10,6 +10,7 @@
 
 #include <string>
 #include <list>
+#include <vector>
 #include <map>
 
 namespace fpsprof {
