@@ -150,8 +150,8 @@ Node* Node::deep_copy(Node* parent) const
 
 void Node::update_stack_level()
 {
+    _stack_level = _parent ? _parent->_stack_level + 1 : -1;
     for(auto& child: _children) {
-        _stack_level = _parent ? _parent->_stack_level + 1 : -1;
         child.update_stack_level();
     }
 }

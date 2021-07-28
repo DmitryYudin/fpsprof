@@ -10,7 +10,7 @@
     <DisplayString> size={ _next_idx } _reading={ _reading } </DisplayString>
   </Type>
     <Type Name="fpsprof::Node">
-        <DisplayString> { _stack_level }/{ _stack_pos }/{ _children._Mypair._Myval2._Mysize } { _name,s }</DisplayString>
+        <DisplayString> { _stack_level }/{ _children._Mypair._Myval2._Mysize } { _name,s }</DisplayString>
         <Expand>
             
             <LinkedListItems>
@@ -24,7 +24,7 @@
     </Type>
 
     <Type Name="fpsprof::Tree">
-        <DisplayString> { _stack_level }/{ _stack_pos }/{ _children._Mypair._Myval2._Mysize } { _name,s }</DisplayString>
+        <DisplayString> { _stack_level }/{ _children._Mypair._Myval2._Mysize } { _name,s }</DisplayString>
         <Expand>
 
             <LinkedListItems>
