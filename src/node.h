@@ -2,7 +2,10 @@
  * Copyright © 2021 Dmitry Yudin. All rights reserved.
  * Licensed under the Apache License, Version 2.0
  */
+
 #pragma once
+
+#include "printable.h"
 
 #include <stdint.h>
 #include <list>
@@ -12,10 +15,12 @@ namespace fpsprof {
 
 class RawEvent;
 
-class Node {
+class Node : public Printable {
 public:
     static Node* CreateFull(std::list<RawEvent>&& rawEvents);
     static Node* CreateNoRecur(const Node& root);
+
+    virtual std::string doPrint(uint64_t realtime_used, unsigned count) override;
 
     Node();
     Node(const RawEvent& rawEvent, Node& parent);
@@ -71,8 +76,6 @@ private:
     unsigned _count;
     unsigned _num_recursions;
     std::list<Node> _children;
-
-
 };
 
 }

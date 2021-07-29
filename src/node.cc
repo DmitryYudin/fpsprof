@@ -49,6 +49,11 @@ Node::Node(const RawEvent& rawEvent, Node& parent)
 {
 }
 
+std::string Node::doPrint(uint64_t realtime_used, unsigned count)
+{
+    return "";
+}
+
 Node& Node::add_child(const RawEvent& rawEvent)
 {
     if (rawEvent.stack_level() != _stack_level + 1) {
