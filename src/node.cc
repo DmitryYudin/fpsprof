@@ -72,7 +72,9 @@ void Node::merge_self(Node&& node, bool strict)
     }
     _realtime_used += node.realtime_used();
     _cpu_used += node.cpu_used();
-    _count += 1;
+    _count += node.count();
+    _num_recursions = std::max(_num_recursions, node.num_recursions());
+
     if(strict) {
         assert(_parent_path == node.parent_path());
         assert(_self_path == node.self_path());
@@ -170,7 +172,7 @@ bool Node::collapse_recursion()
     while(parent) {
         if(parent->name() == _name) {
             parent->_count += _count;
-            parent->_num_recursions += 1;
+            parent->_num_recursions += _num_recursions + 1;
             rebase_children(parent, *this);
             parent->_children.splice(parent->_children.end(), std::move(_children));
             return true;

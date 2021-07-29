@@ -49,6 +49,8 @@ void Reporter::Serialize(std::ostream& os) const
 
 bool Reporter::Deserialize(const char* filename)
 {
+    fprintf(stderr, "Reading '%s'\n", filename);
+
     std::ifstream ifs;
     ifs.open(filename, std::ifstream::in | std::ifstream::binary);
     if (!ifs.is_open()) {
@@ -135,8 +137,10 @@ void generate_reports(
     }
 }
 
-std::string Reporter::Report(int reportFlags)
+std::string Reporter::Report()
 {
+    fprintf(stderr, "Generate reports\n");
+
     std::vector< Node* > threadsFull, threadsNoRecur;
     std::vector< std::list<Stat*> > funcStats;
     generate_reports(_rawThreadMap, threadsFull, threadsNoRecur, funcStats);
@@ -157,13 +161,13 @@ std::string Reporter::Report(int reportFlags)
         Printer::setFrameCounters(frameNode.realtime_used(), frameNode.count());
     }
 
-#define DEBUG_REPORT 1
+#define DEBUG_REPORT 0
 #if DEBUG_REPORT
     std::ostream& ss = std::cout;
 #else
     std::stringstream ss;
 #endif
-
+    fprintf(stderr, "Print\n");
     Printer::printTrees(ss, "Threads summary", threadsFull, true);
     Printer::printTrees(ss, "Detailed report", threadsFull);
     Printer::printTrees(ss, "Summary report (no recursion)", threadsNoRecur);

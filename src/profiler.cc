@@ -29,7 +29,6 @@ public:
         }
         FILE *fp = !_report_filename.empty() ? fopen(_report_filename.c_str(), "wb") : _report;
         if (fp) {
-            int reportFlags = -1 ^ REPORT_DETAILED;
 /*           
             Disable detailed report print out since children go to first parent by the design
             and this produce unexpected call stack view. The summary report fixes this issue.
@@ -46,7 +45,7 @@ public:
              -> LoopFilterLcu            -> 16.5   0.3      125.2    29992.2  239.63   94.5
 
 */
-            fprintf(fp, "%s\n", _reporter.Report(reportFlags).c_str());
+            fprintf(fp, "%s\n", _reporter.Report().c_str());
             if (!_report_filename.empty()) {
                 fclose(fp);
             }

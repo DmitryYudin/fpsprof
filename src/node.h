@@ -44,6 +44,7 @@ public:
     unsigned stack_level_max() const;
 
     uint64_t children_realtime_used() const { uint64_t n = 0; for(auto& child : _children) { n += child.realtime_used(); } return n; }
+    uint64_t children_cpu_used() const { uint64_t n = 0; for(auto& child : _children) { n += child.cpu_used(); } return n; }
 
 protected:
     Node& add_child(const RawEvent& rawEvent);
