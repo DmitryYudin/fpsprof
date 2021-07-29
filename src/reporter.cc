@@ -159,59 +159,6 @@ void print_func(
 
 }
 
-static
-void print_event(
-    std::ostream& os,
-    const Node& node,
-    uint64_t frameRealTimeUsed,
-    unsigned frameCount,
-    int nameLenMax
-)
-{
-    const char* name = PrettyName::name(node.name(), node.stack_level(), node.num_recursions());
-    const char* NA = "-";
-
-    char totInclP[32], totExclP[32], totInclFPS[32];
-    if (frameRealTimeUsed > 0) {
-        double inclP = 100.f * node.realtime_used() / frameRealTimeUsed;
-        double chldP = 100.f * node.children_realtime_used() / frameRealTimeUsed;
-        double exclP = inclP - chldP;
-        double inclFPS = 1.f / (1e-9f * node.realtime_used() / frameCount);
-        sprintf(totInclP, "%6.2f", inclP);
-        sprintf(totExclP, "%6.2f", exclP);
-        sprintf(totInclFPS, "%10.1f", inclFPS);
-    } else {
-        sprintf(totInclP, "%6s", NA);
-        sprintf(totExclP, "%6s", NA);
-        sprintf(totInclFPS, "%10s", NA);
-    }
-
-    char callsPerFrame[32];
-    if(frameCount > 0) {
-        double n = ((double)node.count()) / frameCount;
-        sprintf(callsPerFrame, "%7.2f", n);
-    } else {
-        sprintf(callsPerFrame, "%7s", NA);
-    }
-    char cpuP[64];
-    if (node.realtime_used() > 0) {
-        double inclP = 100.f* node.cpu_used()/ node.realtime_used();
-        sprintf(cpuP, "%6.1f", inclP);
-    } else {
-        sprintf(cpuP, "%6.1f", 0.);
-    }
-
-    char s[2048];
-    sprintf(s, "%3d", node.stack_level());
-
-    sprintf(s + strlen(s), " %-*s %s %s %s %s %s\n",
-        nameLenMax, name,
-        totInclP, totExclP, totInclFPS,
-        callsPerFrame, cpuP
-    );
-    os << s;
- }
-
 static void print_tree(
     std::ostream& os,
     const Node& node,
@@ -220,7 +167,7 @@ static void print_tree(
     int nameWidth
 ) 
 {
-    print_event(os, node, frameRealTimeUsed, frameCount, nameWidth);
+    os << node.doPrint() << std::endl;
     for(auto& child: node.children()) {
         print_tree(os, child, frameRealTimeUsed, frameCount, nameWidth);
     }
@@ -251,13 +198,14 @@ static void print_threads(
         return;
     }
     const Node& frameTop = frameThread->children().front();
-    for(auto& node: threads) {
+    Printable::setFrameCounters(frameTop.realtime_used(), frameTop.count());
+    for(const auto node: threads) {
         uint64_t frameRealTimeUsed = frameTop.realtime_used();
         unsigned frameCount = frameTop.count();
         if(reportType == REPORT_THREAD_ROOT) {
-            print_event(os, frameTop, frameRealTimeUsed, frameCount, nameWidth);
+            os << frameTop.doPrint() << std::endl;
         } else {
-            print_tree(os, frameTop, frameRealTimeUsed, frameCount, nameWidth);
+            print_tree(os, node->children().front(), frameRealTimeUsed, frameCount, nameWidth);
         }
     }
     os << std::endl;
@@ -323,12 +271,13 @@ std::string Reporter::Report(int reportFlags)
 
     unsigned nameWidth = 0;
     {
-        unsigned stackLevelMax = 0;
+        unsigned stackLevelMax = 0, n = 0;
         for (const auto& node : threadsFull) {
             stackLevelMax = std::max(stackLevelMax, node->stack_level_max());
+            n = std::max(n, node->name_len_max());
             nameWidth = std::max(nameWidth, PrettyName::name_size(node->name_len_max(), stackLevelMax));
         }
-        stackLevelMax += 1;
+        Printable::setNameColumnWidth(n, stackLevelMax, 0);
     }
 
 #define DEBUG_REPORT 1

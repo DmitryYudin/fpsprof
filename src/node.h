@@ -20,7 +20,7 @@ public:
     static Node* CreateFull(std::list<RawEvent>&& rawEvents);
     static Node* CreateNoRecur(const Node& root);
 
-    virtual std::string doPrint(uint64_t realtime_used, unsigned count) override;
+    virtual std::string doPrint() const override;
 
     Node();
     Node(const RawEvent& rawEvent, Node& parent);

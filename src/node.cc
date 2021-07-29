@@ -49,9 +49,12 @@ Node::Node(const RawEvent& rawEvent, Node& parent)
 {
 }
 
-std::string Node::doPrint(uint64_t realtime_used, unsigned count)
+std::string Node::doPrint() const
 {
-    return "";
+    char s[32];
+    sprintf(s, "%3d", _stack_level);
+    return std::string(s) + " " + Printable::formatData(_name, _stack_level, _num_recursions, 
+        _realtime_used, children_realtime_used(), _count, _cpu_used);
 }
 
 Node& Node::add_child(const RawEvent& rawEvent)
@@ -163,11 +166,9 @@ void Node::update_stack_level()
 
 bool Node::collapse_recursion()
 {
-    /*if(strcmp(_name, "CompressCtu_Intra") == 0) {
-        __debugbreak();
-    }*/
     for(auto it = _children.begin(); it != _children.end(); ) {
-        if( it->collapse_recursion() ) { // child can modify us and add more items at the end of a '_children' list
+        // child will modify us and add more items at the end of a '_children' list
+        if( it->collapse_recursion() ) {
             it = _children.erase(it);
         } else {
             it++;
@@ -206,7 +207,9 @@ Node* Node::CreateFull(std::list<RawEvent>&& rawEvents)
     }
 
     root->merge_children(true);
-    root->_frame_flag = std::any_of(root->children().begin(), root->children().end(), [](const Node& child) { return child.frame_flag(); });
+    for(const auto& child: root->children()) {
+        root->_frame_flag |= child.frame_flag();
+    }
     if(root->frame_flag() && root->children().size() > 1) {
         throw std::runtime_error("frame thread must have only one entry point");
     }
