@@ -23,8 +23,6 @@
 #include <vector>
 #include <algorithm>
 
-#define LOG10(x) (log(x)/log(10))
-
 #define READ_NEXT_TOKEN(s, err_action) s = strtok(NULL, " "); if (!s) { err_action; };
 #define READ_NUMERIC(s, val, err_action, strtoNum) \
     READ_NEXT_TOKEN(s, err_action) \
@@ -104,134 +102,6 @@ void Reporter::AddProfPoints(std::list<ProfPoint>&& marks)
     _rawThreadMap[thread_id] = std::move(rawEvents);
 }
 
-static
-void print_header(std::ostream& os, const std::string& header, unsigned nameLenMax)
-{
-    const std::string delim = std::string(nameLenMax + 44, '-');
-    os << delim << std::endl;
-    os << header << std::endl;
-    os << delim << std::endl;
-
-    char s[2048];
-    sprintf(s, "%3s %-*s %6s %6s %10s %7s %6s\n", "st", nameLenMax, "name",
-        "inc%", "exc%", "fps", "call/fr", "cpu%");
-    os << s;
-}
-
-struct PrettyName // unsafe
-{
-    static const char* name(const char *name, unsigned stack_level, unsigned num_recursions) // unsafe
-    {
-        unsigned n = PrettyName::fill_size(stack_level);
-        memset(_name, ' ', n);
-        strcpy(_name + n, name);
-
-        if (num_recursions) {
-            sprintf(_name + strlen(_name), "[+%u]", num_recursions);
-        }
-        return _name;
-    }
-    static unsigned name_size(unsigned name_len, unsigned stack_level) {
-        unsigned recur_size = 0;
-        //if (node.num_recursions()) {
-        //    recur_size = 1 + (unsigned)LOG10(node.num_recursions()); // rare case
-        //    recur_size += 3; // "[+%u] "
-        //}
-        unsigned n = PrettyName::fill_size(stack_level);
-        return n + name_len + recur_size;
-    }
-
-private:
-    static unsigned fill_size(unsigned stack_level) {
-        unsigned stack_fill_width = std::min(128u, 2 * (1 + stack_level));
-        return stack_fill_width;
-    }
-    static char _name[1024];
-};
-char PrettyName::_name[];
-
-static
-void print_func(
-    std::ostream& os,
-    const Stat& frameTop,
-    const std::list< Stat* >& stats,
-    int nameLenMax
-)
-{
-
-}
-
-static void print_tree(
-    std::ostream& os,
-    const Node& node,
-    uint64_t frameRealTimeUsed,
-    unsigned frameCount,
-    int nameWidth
-) 
-{
-    os << Printer::printNode(node) << std::endl;
-    for(auto& child: node.children()) {
-        print_tree(os, child, frameRealTimeUsed, frameCount, nameWidth);
-    }
-}
-
-
-static void print_threads(
-    std::ostream& os,
-    int reportType,
-    const std::vector< Node* >& threads,
-    int nameWidth
-)
-{
-    std::string header;
-    switch (reportType) {
-        case REPORT_THREAD_ROOT:    header = std::string("Threads summary");    break;
-        case REPORT_STACK_TOP:      header = std::string("Stack top");  break;
-        case REPORT_SUMMARY_NO_REC: header = "Summary report (no recursion)";   break;
-        case REPORT_SUMMARY:        header = "Summary report";  break;
-        case REPORT_DETAILED:       header = "Detailed report"; break;
-    }
-    header += std::string(" [ ") + std::to_string(threads.size()) + " thread(s) ]";
-
-    print_header(os, header, nameWidth);
-
-    auto& frameThread = threads[0];
-    if( threads[0]->children().size() == 0 ) {
-        return;
-    }
-    const Node& frameTop = frameThread->children().front();
-    Printer::setFrameCounters(frameTop.realtime_used(), frameTop.count());
-    for(const auto node: threads) {
-        uint64_t frameRealTimeUsed = frameTop.realtime_used();
-        unsigned frameCount = frameTop.count();
-        if(reportType == REPORT_THREAD_ROOT) {
-            os << Printer::printNode(frameTop) << std::endl;
-        } else {
-            print_tree(os, node->children().front(), frameRealTimeUsed, frameCount, nameWidth);
-        }
-    }
-    os << std::endl;
-}
-
-static
-void print_funcStats(
-    std::ostream& os,
-    const std::vector< std::list< Stat* > >& funcStats,
-    int nameWidth
-)
-{
-    std::string header = "Summary report";
-    header += std::string(" [ ") + std::to_string(funcStats.size()) + " thread(s) ]";
-
-    const Stat& frameTop = *funcStats[0].front();
-    for(auto& stats: funcStats) {
-        print_func(os, frameTop, stats, nameWidth);
-        for(auto& stat: stats) {
-        }
-    }
-    os << std::endl;
-}
-
 void generate_reports(
     std::map<int, std::list<RawEvent> >& rawThreadMap,
     std::vector< Node* >& threadsFull,
@@ -271,15 +141,20 @@ std::string Reporter::Report(int reportFlags)
     std::vector< std::list<Stat*> > funcStats;
     generate_reports(_rawThreadMap, threadsFull, threadsNoRecur, funcStats);
 
-    unsigned nameWidth = 0;
+    const auto frameThread = threadsFull[0];
+    if(frameThread->children().empty()) { // root only
+        return "";
+    }
+    const auto& frameNode = frameThread->children().front();
+
     {
-        unsigned stackLevelMax = 0, n = 0;
+        unsigned stackLevelMax = 0, nameLengthMax = 0;
         for (const auto& node : threadsFull) {
             stackLevelMax = std::max(stackLevelMax, node->stack_level_max());
-            n = std::max(n, node->name_len_max());
-            nameWidth = std::max(nameWidth, PrettyName::name_size(node->name_len_max(), stackLevelMax));
+            nameLengthMax = std::max(nameLengthMax, node->name_len_max());
         }
-        Printer::setNameColumnWidth(n, stackLevelMax, 0);
+        Printer::setNameColumnWidth(nameLengthMax, stackLevelMax, 0);
+        Printer::setFrameCounters(frameNode.realtime_used(), frameNode.count());
     }
 
 #define DEBUG_REPORT 1
@@ -289,18 +164,11 @@ std::string Reporter::Report(int reportFlags)
     std::stringstream ss;
 #endif
 
-    if (reportFlags & REPORT_THREAD_ROOT) {
-        print_threads(ss, REPORT_THREAD_ROOT, threadsFull, nameWidth);
-    }
-    if (reportFlags & REPORT_DETAILED) {
-        print_threads(ss, REPORT_DETAILED, threadsFull, nameWidth);
-    }
-    if (reportFlags & REPORT_SUMMARY_NO_REC) {
-        print_threads(ss, REPORT_SUMMARY_NO_REC, threadsNoRecur, nameWidth);
-    }
-    if (reportFlags & REPORT_SUMMARY) {
-        print_funcStats(ss, funcStats, nameWidth);
-    }
+    Printer::printTrees(ss, "Threads summary", threadsFull, true);
+    Printer::printTrees(ss, "Detailed report", threadsFull);
+    Printer::printTrees(ss, "Summary report (no recursion)", threadsNoRecur);
+    Printer::printStats(ss, "Function statistics", funcStats);
+
 #if DEBUG_REPORT
     return "We're maintaining. Keep calm and don't panic.";
 #else

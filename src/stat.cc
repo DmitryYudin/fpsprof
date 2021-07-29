@@ -26,19 +26,6 @@ static void check_recursion(const Node& node)
     }
 }
 
-static void check_stack_level(const std::list<Stat*>& stats, const std::list<Node>& children)
-{
-    for(auto& stat: stats) {
-        int n = 0;
-        for(auto& child : children) {
-            n += child.name() == stat->name() ? 1 : 0;
-            if(n > 1) {
-                throw std::runtime_error("recursion detected on statistics collection stage");
-            }
-        }
-    }
-}
-
 Stat::Stat(const Node& node)
     : _name(node.name())
     , _stack_level_min(node.stack_level())
@@ -69,28 +56,18 @@ void Stat::add_node(const Node& node)
 
 static void collect_statistics(std::list<Stat*>& stats, const Node& node)
 {
-    //check_stack_level(stats, node.children());
-
-    auto it = std::find_if(stats.begin(), stats.end(), [&](const Stat* stat) {
-        return stat->name() == node.name();
-    });
-    if(it != stats.end()) {
-        (*it)->add_node(node);
-    } else {
-        stats.push_back(new Stat(node));
-    }
-    /*
-    for(auto& child: node.children()) {
-        auto it = std::find_if(stats.begin(), stats.end(), [&](const Stat* stat) {
-            return stat->name() == child.name();
-        });
-        if(it != stats.end()) {
-            (*it)->add_node(node);
-        } else {
-            stats.push_back(new Stat(child));
+    bool found = false;
+    for(auto stat: stats) {
+        if(stat->name() == node.name()) {
+            stat->add_node(node);
+            found = true;
+            break;
         }
     }
-    */
+    if(!found) {
+        stats.push_back(new Stat(node));
+    }
+
     for(auto& child: node.children()) {
         collect_statistics(stats, child);
     }
@@ -99,10 +76,21 @@ static void collect_statistics(std::list<Stat*>& stats, const Node& node)
 std::list<Stat*> Stat::CollectStatistics(const Node& node)
 {
     std::list<Stat*> stats;
-    stats.push_back(new Stat(node));
     
     collect_statistics(stats, node);
 
+    stats.sort( [](const Stat* a, const Stat* b) { 
+        return a->realtime_used() - a->children_realtime_used() > b->realtime_used() - b->children_realtime_used(); 
+    });
+    auto it = std::find_if(stats.begin(), stats.end(), [](const Stat* stat) { 
+            return stat->stack_level_min() == -1;
+    });
+    if(it != stats.end()) {
+        Stat *root = *it;
+        stats.erase(it);
+        stats.push_back(root);
+    }
+    
     return stats;
 }
 

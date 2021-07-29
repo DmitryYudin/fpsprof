@@ -29,7 +29,7 @@ Node::Node()
     , _self_path("")
     //, _stack_pos(0)
     , _parent(NULL)
-    , _count(1)
+    , _count(0)
     , _num_recursions(0)
 {
 }
@@ -201,10 +201,14 @@ Node* Node::CreateFull(std::list<RawEvent>&& rawEvents)
     root->merge_children(true);
     for(const auto& child: root->children()) {
         root->_frame_flag |= child.frame_flag();
+        root->_realtime_used += child.realtime_used();
+        root->_cpu_used += child.cpu_used();
+        root->_count += child.count();
     }
     if(root->frame_flag() && root->children().size() > 1) {
         throw std::runtime_error("frame thread must have only one entry point");
     }
+
     return root;
 }
 
