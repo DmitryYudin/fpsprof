@@ -255,17 +255,12 @@ void print_tree(
     const Node& node,
     uint64_t realtime_used,
     unsigned count,
-    int stackLevelMax,
     int nameWidth)
 {
     print_event(os, node, realtime_used, count, nameWidth);
 
-    if (node.stack_level() >= stackLevelMax) {
-        return;
-    }
-
     for(auto& child: node.children()) {
-        print_tree(os, child, realtime_used, count, stackLevelMax, nameWidth);
+        print_tree(os, child, realtime_used, count, nameWidth);
     }
 }
 
@@ -309,11 +304,15 @@ void print_threads(
     }
     const Node& frameTop = frameThread->children().front();
     for(auto& nodes: threads) {
+        uint64_t realtime_used = frameTop.realtime_used();
+        unsigned count = frameTop.count();
         if(reportType == REPORT_THREAD_ROOT) {
-            print_tree(os, frameTop, frameTop.realtime_used(), frameTop.count(), stackLevelMax, nameWidth);
-        } else {
-            for(auto& node : nodes->children()) {
-                print_tree(os, node, frameTop.realtime_used(), frameTop.count(), stackLevelMax, nameWidth);
+            print_event(os, frameTop, realtime_used, count, nameWidth);
+            if(reportType == REPORT_THREAD_ROOT) {
+                continue;
+            }
+            for(auto& child: nodes->children()) {
+                print_event(os, child, realtime_used, count, nameWidth);
             }
         }
     }
