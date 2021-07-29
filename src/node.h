@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "printable.h"
-
 #include <stdint.h>
 #include <list>
 #include <string>
@@ -15,12 +13,10 @@ namespace fpsprof {
 
 class RawEvent;
 
-class Node : public Printable {
+class Node {
 public:
     static Node* CreateFull(std::list<RawEvent>&& rawEvents);
     static Node* CreateNoRecur(const Node& root);
-
-    virtual std::string doPrint() const override;
 
     Node();
     Node(const RawEvent& rawEvent, Node& parent);

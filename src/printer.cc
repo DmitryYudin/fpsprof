@@ -5,37 +5,33 @@
 
 #define NOMINMAX
 
-#include "printable.h"
+#include "printer.h"
+#include "node.h"
 
 #include <math.h>
 #include <algorithm>
 #include <string>
 
 #define LOG10(x) (log(x)/log(10))
+#define FILL_LEN(stack_level) std::min(128u, 2 * (1 + stack_level))
 
 namespace fpsprof {
 
-unsigned Printable::_nameColumnWidth = 60;
-uint64_t Printable::_frameRealTimeUsed = 0;
-unsigned Printable::_frameCount = 0;
+unsigned Printer::_nameColumnWidth = 60;
+uint64_t Printer::_frameRealTimeUsed = 0;
+unsigned Printer::_frameCount = 0;
 
-Printable::~Printable()
-{
-}
-
-#define FILL_LEN(stack_level) std::min(128u, 2 * (1 + stack_level))
-
-void Printable::setNameColumnWidth(unsigned nameLen, unsigned stack_level, unsigned num_recursions)
+void Printer::setNameColumnWidth(unsigned nameLen, unsigned stack_level, unsigned num_recursions)
 {
     _nameColumnWidth = FILL_LEN(stack_level) + nameLen  + (num_recursions ? 1 + (unsigned)LOG10(num_recursions) + 3 : 0);
 }
-void Printable::setFrameCounters(uint64_t realtime_used, unsigned count)
+void Printer::setFrameCounters(uint64_t realtime_used, unsigned count)
 {
     _frameRealTimeUsed = realtime_used;
     _frameCount = count;
 }
 
-std::string Printable::formatName(const char *name, unsigned stack_level, unsigned num_recursions)
+std::string Printer::formatName(const char *name, unsigned stack_level, unsigned num_recursions)
 {
     std::string res(FILL_LEN(stack_level), ' ');
     res += name;
@@ -48,7 +44,7 @@ std::string Printable::formatName(const char *name, unsigned stack_level, unsign
     return res;
 }
 
-std::string Printable::formatData(
+std::string Printer::formatData(
     const char *name,
     int stack_level,
     unsigned num_recursions,
@@ -98,6 +94,14 @@ std::string Printable::formatData(
     res.append(" ").append(cpuP);
 
     return res;
+}
+
+std::string Printer::printNode(const Node& node)
+{
+    char s[32];
+    sprintf(s, "%3d", node.stack_level());
+    return std::string(s) + " " + Printer::formatData(node.name(), node.stack_level(), node.num_recursions(), 
+        node.realtime_used(), node.children_realtime_used(), node.count(), node.cpu_used());
 }
 
 }

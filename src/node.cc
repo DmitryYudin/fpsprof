@@ -49,14 +49,6 @@ Node::Node(const RawEvent& rawEvent, Node& parent)
 {
 }
 
-std::string Node::doPrint() const
-{
-    char s[32];
-    sprintf(s, "%3d", _stack_level);
-    return std::string(s) + " " + Printable::formatData(_name, _stack_level, _num_recursions, 
-        _realtime_used, children_realtime_used(), _count, _cpu_used);
-}
-
 Node& Node::add_child(const RawEvent& rawEvent)
 {
     if (rawEvent.stack_level() != _stack_level + 1) {

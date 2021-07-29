@@ -4,9 +4,11 @@
  */
 
 #define NOMINMAX
+
 #include "reporter.h"
 #include "node.h"
 #include "stat.h"
+#include "printer.h"
 
 #include <assert.h>
 #include <string.h>
@@ -167,7 +169,7 @@ static void print_tree(
     int nameWidth
 ) 
 {
-    os << node.doPrint() << std::endl;
+    os << Printer::printNode(node) << std::endl;
     for(auto& child: node.children()) {
         print_tree(os, child, frameRealTimeUsed, frameCount, nameWidth);
     }
@@ -198,12 +200,12 @@ static void print_threads(
         return;
     }
     const Node& frameTop = frameThread->children().front();
-    Printable::setFrameCounters(frameTop.realtime_used(), frameTop.count());
+    Printer::setFrameCounters(frameTop.realtime_used(), frameTop.count());
     for(const auto node: threads) {
         uint64_t frameRealTimeUsed = frameTop.realtime_used();
         unsigned frameCount = frameTop.count();
         if(reportType == REPORT_THREAD_ROOT) {
-            os << frameTop.doPrint() << std::endl;
+            os << Printer::printNode(frameTop) << std::endl;
         } else {
             print_tree(os, node->children().front(), frameRealTimeUsed, frameCount, nameWidth);
         }
@@ -277,7 +279,7 @@ std::string Reporter::Report(int reportFlags)
             n = std::max(n, node->name_len_max());
             nameWidth = std::max(nameWidth, PrettyName::name_size(node->name_len_max(), stackLevelMax));
         }
-        Printable::setNameColumnWidth(n, stackLevelMax, 0);
+        Printer::setNameColumnWidth(n, stackLevelMax, 0);
     }
 
 #define DEBUG_REPORT 1
