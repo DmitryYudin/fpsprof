@@ -64,7 +64,7 @@ std::string Printer::formatData(
         double inclP = 100.f * realtime_used / _frameRealTimeUsed;
         double chldP = 100.f * children_realtime_used / _frameRealTimeUsed;
         double exclP = inclP - chldP;
-        double inclFPS = 1.f / (1e-9f * realtime_used / _frameCount);
+        double inclFPS = realtime_used ? 1.f / (1e-9f * realtime_used / _frameCount) : 0;
         sprintf(totInclP, "%6.2f", inclP);
         sprintf(totExclP, "%6.2f", exclP);
         sprintf(totInclFPS, "%10.1f", inclFPS);

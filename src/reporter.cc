@@ -111,11 +111,21 @@ void generate_reports(
     std::vector< std::list< Stat* > >& funcStats
 )
 {
+    uint64_t penalty_realtime_used = 10605100;
+    unsigned penalty_denom = 10000;
+
     for (auto& rawEventsItem : rawThreadMap) {
         auto& rawEvents = rawEventsItem.second;
 
         auto rootFull = Node::CreateFull(std::move(rawEvents));
+        Node::MitigateCounterPenalty(*rootFull, penalty_realtime_used, penalty_denom);
+
         auto rootNoRecur = Node::CreateNoRecur(*rootFull);
+        
+
+        
+//        Node::MitigateCounterPenalty(*rootNoRecur, penalty_realtime_used, penalty_denom);
+
         auto rootStat = Stat::CollectStatistics(*rootNoRecur);
         threadsFull.push_back(rootFull);
         threadsNoRecur.push_back(rootNoRecur);

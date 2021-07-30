@@ -17,6 +17,7 @@ class Node {
 public:
     static Node* CreateFull(std::list<RawEvent>&& rawEvents);
     static Node* CreateNoRecur(const Node& root);
+    static void MitigateCounterPenalty(Node& root, uint64_t penalty_realtime_used, unsigned penalty_denom);
 
     Node();
     Node(const RawEvent& rawEvent, Node& parent);
@@ -46,6 +47,8 @@ public:
     uint64_t children_realtime_used() const { uint64_t n = 0; for(auto& child : _children) { n += child.realtime_used(); } return n; }
     uint64_t children_cpu_used() const { uint64_t n = 0; for(auto& child : _children) { n += child.cpu_used(); } return n; }
 
+    bool has_penalty() const { return _has_penalty; }
+
 protected:
     Node& add_child(const RawEvent& rawEvent);
     void merge_children(bool strict);
@@ -58,6 +61,9 @@ protected:
     void update_stack_level();
 
 private:
+
+    unsigned mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned penalty_denom);
+
     const char* _name;
     int _stack_level;
     bool _frame_flag;
@@ -73,6 +79,8 @@ private:
     unsigned _count;
     unsigned _num_recursions;
     std::list<Node> _children;
+
+    bool _has_penalty;
 };
 
 }

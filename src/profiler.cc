@@ -77,6 +77,17 @@ private:
 
 struct ThreadProf {
     explicit ThreadProf(ThreadMgr& threadMgr) : _threadMgr(threadMgr) {
+        timer::wallclock_t start_wc = timer::wallclock::timestamp();
+        unsigned n = 10*1000;
+        for(unsigned i = 0; i < n; i++) {
+            timer::wallclock::timestamp();
+            timer::thread::now();
+            timer::wallclock::timestamp();
+            timer::thread::now();
+        }
+        timer::wallclock_t stop_wc = timer::wallclock::timestamp();
+        int64_t diff = timer::wallclock::diff(stop_wc, start_wc);
+        fprintf(stderr, "wallclock comlpexity: %.8f sec (%.0f nsec) per %d marks\n", diff*1e-9, (double)diff, n);
     }
     ~ThreadProf() {
         if (_marks.size() == 0) {

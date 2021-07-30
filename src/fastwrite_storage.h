@@ -71,7 +71,7 @@ public:
 
     std::list<item_t> to_list() { // destructive
         std::list<item_t> out;
-        printf("wc_penalty = %I64d\n", wc_penalty);
+        printf("wc_penalty = %.8f sec\n", timer::wallclock::diff(wc_penalty, 0)*1e-9);
         if (_next_idx == 0 || _reading) { // read once
             return out;
         }
