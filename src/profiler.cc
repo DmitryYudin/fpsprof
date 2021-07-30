@@ -111,6 +111,7 @@ struct ThreadProf {
         _pp_last_in = pp;
 #endif
         pp->Start();
+        pp->_start_wc -= _marks.wc_penalty;
         return pp;
     }
     void pop(ProfPoint* pp) {
@@ -119,6 +120,7 @@ struct ThreadProf {
         if (pp->stack_level() != _stack_level) {
             panic_and_exit(pp);
         }
+        pp->_start_wc += _marks.wc_penalty;
         pp->Stop();
 #ifndef NDEBUG
         _pp_last_out = pp;

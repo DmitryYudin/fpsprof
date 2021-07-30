@@ -8,6 +8,8 @@
 #include <list>
 #include <assert.h>
 
+#include "timers.h"
+
 namespace fpsprof {
 // write once forward_list
 // + Fast memory allocation
@@ -27,6 +29,7 @@ public:
         }
     }
 
+    uint64_t wc_penalty = 0;
     item_t* alloc_item() {
         assert(!_reading);
         item_t* item = &current_page[_next_idx & page_mask];
@@ -35,8 +38,10 @@ public:
             if (_next_page != _pages.end()) {
                 current_page = *_next_page++;
             } else {
+                uint64_t wc = timer::wallclock::timestamp();
                 current_page = page_alloc(); // caller is responsible to manage reserve()
                 _pages.push_back(current_page);
+                wc_penalty += timer::wallclock::timestamp() - wc;
             }
         }
         return item;
@@ -52,6 +57,7 @@ public:
         if (num_items <= num_items_free) {
             return;
         }
+        uint64_t wc = timer::wallclock::timestamp();
         unsigned num_pages_minus1 = (num_items - num_items_free) >> page_bits;
         do {
             item_t* page = page_alloc();
@@ -60,11 +66,12 @@ public:
                 _next_page--; // set to first preallocated
             }
         } while (num_pages_minus1--);
+        wc_penalty += timer::wallclock::timestamp() - wc;
     }
 
     std::list<item_t> to_list() { // destructive
         std::list<item_t> out;
-
+        printf("wc_penalty = %I64d\n", wc_penalty);
         if (_next_idx == 0 || _reading) { // read once
             return out;
         }
