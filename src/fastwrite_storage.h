@@ -104,7 +104,7 @@ private:
     static void page_free(item_t* page) {
         free(page);
     }
-    const static unsigned page_bits = 10;
+    const static unsigned page_bits = 14;
     const static unsigned page_mask = (1 << page_bits) - 1;
 
     bool _reading = false;
