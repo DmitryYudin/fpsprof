@@ -168,7 +168,7 @@ bool Node::collapse_recursion()
             it++;
         }
     }
-    Node *parent = _parent;
+#if 0
     while(parent) {
         if(parent->name() == _name) {
             parent->_count += _count;
@@ -181,6 +181,37 @@ bool Node::collapse_recursion()
         }
     }
     return false;
+#else
+    Node *parent = _parent;
+    Node *parent_recur = NULL;
+    while(parent) {
+        if(parent->name() == _name) {
+            parent_recur = parent;
+            break;
+        } else {
+            parent = parent->_parent;
+        }
+    }
+    if(!parent_recur) {
+        return false;
+    }
+
+    uint64_t self_realtime_used = realtime_used() - children_realtime_used();
+    uint64_t self_cpu_used = cpu_used() - children_cpu_used(); // TODO: might be negative (???)
+    parent = _parent;
+    rebase_children(parent, *this);
+    parent->_children.splice(parent->_children.end(), std::move(_children));
+    while (parent != parent_recur) {
+        parent->_realtime_used -= self_realtime_used;
+        parent->_cpu_used -= self_cpu_used;
+        parent = parent->_parent;
+    }
+    parent_recur->_count += _count;
+    parent_recur->_num_recursions += _num_recursions + 1;
+
+    return true;
+#endif
+    
 }
 
 Node* Node::CreateFull(std::list<RawEvent>&& rawEvents)
