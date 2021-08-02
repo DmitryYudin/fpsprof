@@ -9,4 +9,17 @@
   <Type Name="fpsprof::fastwrite_storage_t&lt;*&gt;">
     <DisplayString> size={ _next_idx } _reading={ _reading } </DisplayString>
   </Type>
+    <Type Name="fpsprof::Node">
+        <DisplayString> { _stack_level }/{ _children._Mypair._Myval2._Mysize } { _name,s }</DisplayString>
+        <Expand>
+            
+            <LinkedListItems>
+                <Size>          _children._Mypair._Myval2._Mysize           </Size>
+                <HeadPointer>   _children._Mypair._Myval2._Myhead-&gt;_Next </HeadPointer>
+                <!-- The debugger evaluates the NextPointer and ValueNode expressions in the context of the LinkedListItems node element, not the parent list type. -->
+                <NextPointer>   _Next                             </NextPointer>
+                <ValueNode>     _Myval                            </ValueNode>
+            </LinkedListItems>
+        </Expand>
+    </Type>
 </AutoVisualizer>

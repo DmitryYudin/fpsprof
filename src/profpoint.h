@@ -54,7 +54,7 @@ struct ProfPoint {
     bool complete() const {
         return _state == COMPLETE;
     }
-private:
+//private:
     static timer::wallclock_t _init_wc;
 
     state_t _state;
