@@ -32,6 +32,8 @@ Node::Node()
     , _count(0)
     , _num_recursions(0)
     , _has_penalty(true)
+    , _num_removed(0)
+    , _count_norec(0)
 {
 }
 Node::Node(const RawEvent& rawEvent, Node& parent)
@@ -48,6 +50,8 @@ Node::Node(const RawEvent& rawEvent, Node& parent)
     , _count(1)
     , _num_recursions(0)
     , _has_penalty(true)
+    , _num_removed(0)
+    , _count_norec(1)
 {
 }
 
@@ -61,6 +65,7 @@ Node& Node::add_child(const RawEvent& rawEvent)
             "from thread time to process time");
     }
     _children.emplace_back(rawEvent, *this);
+
     return _children.back();
 }
 void Node::merge_self(Node&& node, bool strict)
@@ -85,6 +90,9 @@ void Node::merge_self(Node&& node, bool strict)
     }
     rebase_children(this, node);
     _children.splice(_children.end(), std::move(node._children));
+
+    _num_removed += node._num_removed;
+    _count_norec += node._count_norec;
 }
 
 void Node::merge_children(bool strict)
@@ -135,6 +143,8 @@ Node* Node::deep_copy(Node* parent) const
     node->_count = _count;
     node->_num_recursions = _num_recursions;
     node->_has_penalty = _has_penalty;
+    node->_num_removed = _num_removed;
+    node->_count_norec = _count_norec;
     /*
     std::list<Node> newChildren;
     for(auto& child: _children) {
@@ -208,6 +218,9 @@ bool Node::collapse_recursion()
     parent = _parent;
     rebase_children(parent, *this);
     parent->_children.splice(parent->_children.end(), std::move(_children));
+    parent->_num_removed += _count_norec + _num_removed;
+    //_count_norec
+
     while (parent != parent_recur) {
         parent->_realtime_used -= self_realtime_used;
         parent->_cpu_used -= self_cpu_used;
@@ -279,6 +292,19 @@ unsigned Node::stack_level_max() const
     return n;
 }
 
+/*
+unsigned Node::get_invoked_children() const
+{
+    unsigned n = 0;
+    for(auto& child: _children) {
+        n += child.get_invoked_children();
+    }
+    n += _invoked_children;
+    return n;
+}
+*/
+
+/*
 unsigned Node::mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned penalty_denom)
 {
     unsigned deepCounter = 0;
@@ -287,21 +313,56 @@ unsigned Node::mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned
     }
 #if 0
     uint64_t decrement_realtime_used = penalty_realtime_used*(deepCounter + _count/2)/penalty_denom;
-#else
-    uint64_t decrement_realtime_used = penalty_realtime_used*deepCounter/penalty_denom + penalty_realtime_used/2*_count/penalty_denom;
+#elif 0
+    uint64_t decrement_realtime_used = penalty_realtime_used*deepCounter/penalty_denom + penalty_realtime_used/2*(_count + _num_removed)/penalty_denom;
+#elif 0
+    uint64_t decrement_realtime_used = penalty_realtime_used*deepCounter/penalty_denom + penalty_realtime_used/2*(_count_norec + _num_removed)/penalty_denom;
+#elif 0
+    uint64_t decrement_realtime_used = penalty_realtime_used*(deepCounter + _num_removed)/penalty_denom + penalty_realtime_used/2*(_count )/penalty_denom;
+#elif 1
+    uint64_t decrement_realtime_used = penalty_realtime_used*(deepCounter + _num_removed)/penalty_denom + penalty_realtime_used/2*(_count_norec )/penalty_denom;
+
 #endif
-    _realtime_used = _realtime_used < decrement_realtime_used ? 0 : _realtime_used - decrement_realtime_used;
+    if(_parent == NULL) { // root
+        _realtime_used = children_realtime_used();
+    } else {
+        _realtime_used = _realtime_used < decrement_realtime_used ? 0 : _realtime_used - decrement_realtime_used;
 
-    uint64_t children_realtime_used_ = children_realtime_used();
-    if(_realtime_used < children_realtime_used_) {
-        _realtime_used = children_realtime_used_;
+        uint64_t children_realtime_used_ = children_realtime_used();
+        if(_realtime_used < children_realtime_used_) {
+            _realtime_used = children_realtime_used_;
+        }
     }
-
     _has_penalty = false;
 
-    return deepCounter + _count;
+    //return deepCounter + _count + _num_removed;
+    return deepCounter + _count_norec + _num_removed;
+    //return deepCounter + _count_norec;
 }
+*/
+unsigned Node::mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned penalty_denom)
+{
+    //uint64_t children_realtime_used = children_realtime_used();
+    unsigned numChildrenFull = 0;
+    for(auto& child: _children) {
+        numChildrenFull += child.mitigate_counter_penalty(penalty_realtime_used, penalty_denom);
+    }
+    uint64_t decrement_realtime_used = penalty_realtime_used*(numChildrenFull + _num_removed)/penalty_denom + penalty_realtime_used/2*(_count_norec)/penalty_denom;
 
+    if(_parent == NULL) { // root
+        _realtime_used = children_realtime_used();
+    } else {
+        _realtime_used = _realtime_used < decrement_realtime_used ? 0 : _realtime_used - decrement_realtime_used;
+
+        uint64_t children_realtime_used_ = children_realtime_used();
+        if(_realtime_used < children_realtime_used_) {
+            _realtime_used = children_realtime_used_;
+        }
+    }
+    _has_penalty = false;
+
+    return numChildrenFull + _count_norec + _num_removed;
+}
 void Node::MitigateCounterPenalty(Node& root, uint64_t penalty_realtime_used, unsigned penalty_denom)
 {
     root.mitigate_counter_penalty(penalty_realtime_used, penalty_denom);

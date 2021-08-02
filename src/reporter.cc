@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <exception>
 
 #define READ_NEXT_TOKEN(s, err_action) s = strtok(NULL, " "); if (!s) { err_action; };
 #define READ_NUMERIC(s, val, err_action, strtoNum) \
@@ -108,7 +109,8 @@ void generate_reports(
     std::map<int, std::list<RawEvent> >& rawThreadMap,
     std::vector< Node* >& threadsFull,
     std::vector< Node* >& threadsNoRecur,
-    std::vector< std::list< Stat* > >& funcStats
+    std::vector< std::list< Stat* > >& funcStatsFull,
+    std::vector< std::list< Stat* > >& funcStatsNoRecur
 )
 {
     uint64_t penalty_realtime_used = 10605100;
@@ -118,18 +120,18 @@ void generate_reports(
         auto& rawEvents = rawEventsItem.second;
 
         auto rootFull = Node::CreateFull(std::move(rawEvents));
-        Node::MitigateCounterPenalty(*rootFull, penalty_realtime_used, penalty_denom);
-
         auto rootNoRecur = Node::CreateNoRecur(*rootFull);
-        
 
-        
-//        Node::MitigateCounterPenalty(*rootNoRecur, penalty_realtime_used, penalty_denom);
+        Node::MitigateCounterPenalty(*rootFull, penalty_realtime_used, penalty_denom);
+        auto rootNoRecur2 = Node::CreateNoRecur(*rootFull);
 
-        auto rootStat = Stat::CollectStatistics(*rootNoRecur);
+        Node::MitigateCounterPenalty(*rootNoRecur, penalty_realtime_used, penalty_denom);
+
         threadsFull.push_back(rootFull);
         threadsNoRecur.push_back(rootNoRecur);
-        funcStats.push_back(rootStat);
+
+        funcStatsFull.push_back(Stat::CollectStatistics(*rootNoRecur2));
+        funcStatsNoRecur.push_back(Stat::CollectStatistics(*rootNoRecur));
     }
 
     int mainThreadId = -1;
@@ -144,18 +146,20 @@ void generate_reports(
     }
     if (mainThreadId != 0) { // set to mt_id = 0
         std::swap(threadsFull[0], threadsFull[mainThreadId]);
+        std::swap(threadsNoRecur[0], threadsNoRecur[mainThreadId]);
     }
 }
 
 std::string Reporter::Report()
 {
     fprintf(stderr, "Generate reports\n");
-
+try {
     std::vector< Node* > threadsFull, threadsNoRecur;
-    std::vector< std::list<Stat*> > funcStats;
-    generate_reports(_rawThreadMap, threadsFull, threadsNoRecur, funcStats);
+    std::vector< std::list<Stat*> > funcStatsFull, funcStatsNoRecur;
+    generate_reports(_rawThreadMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur);
 
-    const auto frameThread = threadsFull[0];
+    //const auto frameThread = threadsFull[0];
+const auto frameThread = threadsNoRecur[0];
     if(frameThread->children().empty()) { // root only
         return "";
     }
@@ -181,13 +185,18 @@ std::string Reporter::Report()
     Printer::printTrees(ss, "Threads summary", threadsFull, true);
     Printer::printTrees(ss, "Detailed report", threadsFull);
     Printer::printTrees(ss, "Summary report (no recursion)", threadsNoRecur);
-    Printer::printStats(ss, "Function statistics", funcStats);
+    Printer::printStats(ss, "Function statistics (Full)", funcStatsFull);
+    Printer::printStats(ss, "Function statistics (no recursion)", funcStatsNoRecur);
 
 #if DEBUG_REPORT
     return "We're maintaining. Keep calm and don't panic.";
 #else
     return ss.str();
 #endif
+} catch (std::exception& e) {
+    fprintf(stderr, "exception: %s\n", e.what());
+    return "";
+}
 }
 
 }

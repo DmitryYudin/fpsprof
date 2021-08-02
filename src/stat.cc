@@ -79,8 +79,12 @@ std::list<Stat*> Stat::CollectStatistics(const Node& node)
     
     collect_statistics(stats, node);
 
-    stats.sort( [](const Stat* a, const Stat* b) { 
-        return a->realtime_used() - a->children_realtime_used() > b->realtime_used() - b->children_realtime_used(); 
+    stats.sort( [](const Stat* a, const Stat* b) {
+        int64_t a_incl = a->realtime_used();
+        int64_t b_incl = b->realtime_used();
+        int64_t a_self = a_incl - a->children_realtime_used();
+        int64_t b_self = b_incl - b->children_realtime_used();
+        return  a_self != b_self ? a_self > b_self : a_incl < b_incl; 
     });
     auto it = std::find_if(stats.begin(), stats.end(), [](const Stat* stat) { 
             return stat->stack_level_min() == -1;

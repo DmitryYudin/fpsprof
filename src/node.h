@@ -49,19 +49,21 @@ public:
 
     bool has_penalty() const { return _has_penalty; }
 
+    Node* deep_copy(Node* parent) const;
+
 protected:
     Node& add_child(const RawEvent& rawEvent);
     void merge_children(bool strict);
     void merge_self(Node&& node, bool strict);
 
-    Node* deep_copy(Node* parent) const;
+
     static void rebase_children(const Node* newHead, Node& oldHead);
 
     bool collapse_recursion();
     void update_stack_level();
 
 private:
-
+    //unsigned get_invoked_children() const;
     unsigned mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned penalty_denom);
 
     const char* _name;
@@ -81,6 +83,9 @@ private:
     std::list<Node> _children;
 
     bool _has_penalty;
+
+    unsigned _num_removed;
+    unsigned _count_norec;
 };
 
 }
