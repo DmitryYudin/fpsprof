@@ -63,7 +63,6 @@ protected:
     void update_stack_level();
 
 private:
-    //unsigned get_invoked_children() const;
     unsigned mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned penalty_denom);
 
     const char* _name;
