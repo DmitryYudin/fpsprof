@@ -213,8 +213,6 @@ bool Node::collapse_recursion()
         return false;
     }
 
-    assert(_num_removed + _count_norec == _count);
-
     uint64_t self_realtime_used = realtime_used() - children_realtime_used();
     uint64_t self_cpu_used = cpu_used() - children_cpu_used(); // TODO: might be negative (???)
     parent = _parent;
@@ -295,15 +293,13 @@ unsigned Node::stack_level_max() const
     return n;
 }
 
-unsigned Node::mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned penalty_denom)
+unsigned Node::mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec)
 {
-    //uint64_t children_realtime_used = children_realtime_used();
     unsigned numChildrenFull = 0;
     for(auto& child: _children) {
-        numChildrenFull += child.mitigate_counter_penalty(penalty_realtime_used, penalty_denom);
+        numChildrenFull += child.mitigate_counter_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
     }
-    //uint64_t decrement_realtime_used = penalty_realtime_used*(numChildrenFull + _num_removed)/penalty_denom + penalty_realtime_used/2*(_count_norec)/penalty_denom;
-    uint64_t decrement_realtime_used = penalty_realtime_used*(numChildrenFull + _num_removed)/penalty_denom + penalty_realtime_used/2*(_count)/penalty_denom;
+    uint64_t decrement_realtime_used = penalty_children_nsec*(numChildrenFull + _num_removed)/penalty_denom + penalty_self_nsec*(_count)/penalty_denom;
 
     if(_parent == NULL) { // root
         _realtime_used = children_realtime_used();
@@ -320,8 +316,8 @@ unsigned Node::mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned
     return numChildrenFull + _count_norec + _num_removed;
     //return numChildrenFull + _count + _num_removed;
 }
-void Node::MitigateCounterPenalty(Node& root, uint64_t penalty_realtime_used, unsigned penalty_denom)
+void Node::MitigateCounterPenalty(Node& root, unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec)
 {
-    root.mitigate_counter_penalty(penalty_realtime_used, penalty_denom);
+    root.mitigate_counter_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
 }
 }

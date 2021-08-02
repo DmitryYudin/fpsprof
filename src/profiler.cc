@@ -19,6 +19,37 @@ namespace fpsprof {
 
 class ThreadMgr {
 public:
+    ThreadMgr() {
+        timer::wallclock_t start_wc = timer::wallclock::timestamp();
+        unsigned n = 10*1000;
+        uint64_t sum_wc = 0;
+        for(unsigned i = 0; i < n; i++) {
+            sum_wc -= timer::wallclock::timestamp();
+            timer::thread::now();
+            sum_wc += timer::wallclock::timestamp();
+            timer::thread::now();
+        }
+        timer::wallclock_t stop_wc = timer::wallclock::timestamp();
+
+        int64_t self_nsec = timer::wallclock::diff(sum_wc, 0);
+        int64_t children_nsec = timer::wallclock::diff(stop_wc, start_wc);
+#ifndef NDEBUG
+        fprintf(stderr, "wallclock penalty per %d marks: self %.8f sec (%.0f nsec), children %.8f sec (%.0f nsec)\n", 
+                n, self_nsec*1e-9, (double)self_nsec, children_nsec*1e-9, (double)children_nsec);
+#endif
+        // children 0.01087290 sec (10872900 nsec) per 10000 marks, 
+        // self     0.00542990 sec ( 5429900 nsec)
+
+        // children 0.01043500 sec (10435000 nsec) per 10000 marks
+        // self     0.00521110 sec ( 5211100 nsec)
+
+        // children 0.10455560 sec (104555600 nsec) per 100000 marks, 
+        // self     0.05223850 sec ( 52238500 nsec)
+        _penalty_denom = n;
+        _penalty_self_nsec = self_nsec;
+        _penalty_children_nsec = children_nsec;
+    }
+
     ~ThreadMgr() {
         if (!_serialize_filename.empty()) {
             std::ofstream ofs(_serialize_filename, std::ios::out | std::ios::binary | std::ios::trunc);
@@ -51,6 +82,12 @@ public:
             }
         }
     }
+    void get_penalty(unsigned& penalty_denom, int64_t& penalty_self_nsec, int64_t& penalty_children_nsec) {
+        penalty_denom = _penalty_denom;
+        penalty_self_nsec = _penalty_self_nsec;
+        penalty_children_nsec = _penalty_children_nsec;
+    }
+
     void set_serialize_stream(FILE* stream) {
         _serialize = stream;
     }
@@ -73,33 +110,14 @@ private:
     std::string _report_filename;
 
     Reporter _reporter;
+
+    unsigned _penalty_denom;
+    int64_t _penalty_children_nsec;
+    int64_t _penalty_self_nsec;
 };
 
 struct ThreadProf {
     explicit ThreadProf(ThreadMgr& threadMgr) : _threadMgr(threadMgr) {
-        timer::wallclock_t start_wc = timer::wallclock::timestamp();
-        unsigned n = 10*10000;
-        uint64_t sum_wc = 0;
-        for(unsigned i = 0; i < n; i++) {
-            sum_wc -= timer::wallclock::timestamp();
-            timer::thread::now();
-            sum_wc += timer::wallclock::timestamp();
-            timer::thread::now();
-        }
-        timer::wallclock_t stop_wc = timer::wallclock::timestamp();
-        int64_t self_nsec = timer::wallclock::diff(stop_wc, start_wc);
-        int64_t children_nsec = timer::wallclock::diff(sum_wc, 0);
-        fprintf(stderr, "wallclock comlpexity: %.8f sec (%.0f nsec) per %d marks, children %.8f sec (%.0f nsec)\n", 
-                self_nsec*1e-9, (double)self_nsec, n, children_nsec*1e-9, (double)children_nsec);
-
-        // self     0.01087290 sec (10872900 nsec) per 10000 marks, 
-        // children 0.00542990 sec ( 5429900 nsec)
-
-        // self     0.01043500 sec (10435000 nsec) per 10000 marks
-        // children 0.00521110 sec ( 5211100 nsec)
-
-        // self:    0.10455560 sec (104555600 nsec) per 100000 marks, 
-        // children 0.05223850 sec ( 52238500 nsec)
     }
     ~ThreadProf() {
         if (_marks.size() == 0) {
@@ -196,6 +214,10 @@ timer::wallclock_t ProfPoint::_init_wc = timer::wallclock::timestamp();
 static ThreadMgr gThreadMgr;
 static thread_local ThreadProf gThreadProf(gThreadMgr);
 
+extern void GetPenalty(unsigned& penalty_denom, int64_t& penalty_self_nsec, int64_t& penalty_children_nsec)
+{
+    gThreadMgr.get_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
+}
 }
 
 extern "C" void FPSPROF_serialize_stream(FILE* fp)

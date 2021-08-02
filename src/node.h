@@ -17,7 +17,7 @@ class Node {
 public:
     static Node* CreateFull(std::list<RawEvent>&& rawEvents);
     static Node* CreateNoRecur(const Node& root);
-    static void MitigateCounterPenalty(Node& root, uint64_t penalty_realtime_used, unsigned penalty_denom);
+    static void MitigateCounterPenalty(Node& root, unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec);
 
     Node();
     Node(const RawEvent& rawEvent, Node& parent);
@@ -56,14 +56,13 @@ protected:
     void merge_children(bool strict);
     void merge_self(Node&& node, bool strict);
 
-
     static void rebase_children(const Node* newHead, Node& oldHead);
 
     bool collapse_recursion();
     void update_stack_level();
 
 private:
-    unsigned mitigate_counter_penalty(uint64_t penalty_realtime_used, unsigned penalty_denom);
+    unsigned mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec);
 
     const char* _name;
     int _stack_level;

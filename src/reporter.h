@@ -26,6 +26,9 @@ public:
     std::string Report();
 
 private:
+    unsigned _penalty_denom = 0;
+    int64_t _penalty_self_nsec = 0, _penalty_children_nsec = 0;
+
     std::map<int, std::list<RawEvent> > _rawThreadMap;
 };
 

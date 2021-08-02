@@ -29,13 +29,27 @@
     READ_NEXT_TOKEN(s, err_action) \
     { char* end; val = strtoNum(s, &end, 10); if (*end != '\0') { err_action; } }
 #define READ_LONG(s, val, err_action) READ_NUMERIC(s, val, err_action, strtol)
+#define READ_LONGLONG(s, val, err_action) READ_NUMERIC(s, val, err_action, strtoll)
 
 #define STREAM_PREFIX "prof:event:"
+#define PENALTY_PREFIX "prof:penalty:"
 
 namespace fpsprof {
 
+extern void GetPenalty(unsigned& penalty_denom, int64_t& penalty_self_nsec, int64_t& penalty_children_nsec);
+
 void Reporter::Serialize(std::ostream& os) const
 {
+    unsigned penalty_denom;
+    int64_t penalty_self_nsec, penalty_children_nsec;
+    GetPenalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
+
+    os << PENALTY_PREFIX << " "
+        << penalty_denom << " "
+        << penalty_self_nsec << " "
+        << penalty_children_nsec << " "
+        << std::endl;
+
     for (const auto& rawEvents : _rawThreadMap) {
         int thread_id = rawEvents.first;
         const auto& events = rawEvents.second;
@@ -70,6 +84,11 @@ bool Reporter::Deserialize(const char* filename)
             continue;
         }
         if (0 != strncmp(s, STREAM_PREFIX, strlen(STREAM_PREFIX))) {
+            if (0 == strncmp(s, PENALTY_PREFIX, strlen(PENALTY_PREFIX))) {                
+                READ_LONG(s, _penalty_denom, return false)
+                READ_LONGLONG(s, _penalty_self_nsec, return false)
+                READ_LONGLONG(s, _penalty_children_nsec, return false)
+            }
             continue;
         }
 
@@ -110,22 +129,23 @@ void generate_reports(
     std::vector< Node* >& threadsFull,
     std::vector< Node* >& threadsNoRecur,
     std::vector< std::list< Stat* > >& funcStatsFull,
-    std::vector< std::list< Stat* > >& funcStatsNoRecur
+    std::vector< std::list< Stat* > >& funcStatsNoRecur,
+    unsigned penalty_denom,
+    uint64_t penalty_self_nsec,
+    uint64_t penalty_children_nsec
+    
 )
 {
-    uint64_t penalty_realtime_used = 10605100;
-    unsigned penalty_denom = 10000;
-
     for (auto& rawEventsItem : rawThreadMap) {
         auto& rawEvents = rawEventsItem.second;
 
         auto rootFull = Node::CreateFull(std::move(rawEvents));
         auto rootNoRecur = Node::CreateNoRecur(*rootFull);
 
-        Node::MitigateCounterPenalty(*rootFull, penalty_realtime_used, penalty_denom);
+        Node::MitigateCounterPenalty(*rootFull, penalty_denom, penalty_self_nsec, penalty_children_nsec);
         auto rootNoRecur2 = Node::CreateNoRecur(*rootFull);
 
-        Node::MitigateCounterPenalty(*rootNoRecur, penalty_realtime_used, penalty_denom);
+        Node::MitigateCounterPenalty(*rootNoRecur, penalty_denom, penalty_self_nsec, penalty_children_nsec);
 
         threadsFull.push_back(rootFull);
         threadsNoRecur.push_back(rootNoRecur);
@@ -156,7 +176,8 @@ std::string Reporter::Report()
 try {
     std::vector< Node* > threadsFull, threadsNoRecur;
     std::vector< std::list<Stat*> > funcStatsFull, funcStatsNoRecur;
-    generate_reports(_rawThreadMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur);
+    generate_reports(_rawThreadMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur,
+        _penalty_denom, _penalty_self_nsec, _penalty_children_nsec);
 
     //const auto frameThread = threadsFull[0];
 const auto frameThread = threadsNoRecur[0];
