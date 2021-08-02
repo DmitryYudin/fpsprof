@@ -18,6 +18,8 @@
 #define TRIM_STACK_LEVEL(stack_level) std::max(0, int(stack_level))
 #define FILL_LEN(stack_level) std::min(128, 2 * TRIM_STACK_LEVEL(stack_level))
 
+#define PRINT_CPU_USAGE 0 // does not have any meaning on a Windwos machine
+
 namespace fpsprof {
 
 unsigned Printer::_nameColumnWidth = 60;
@@ -94,33 +96,49 @@ std::string Printer::formatData(
     res.append(" ").append(totExclP);
     res.append(" ").append(totInclFPS);
     res.append(" ").append(callsPerFrame);
+#if PRINT_CPU_USAGE
     res.append(" ").append(cpuP);
+#endif
 
     return res;
 }
 
 void Printer::printTreeHdr(std::ostream& os, const std::string& name)
 {
-    const std::string delim = std::string(Printer::_nameColumnWidth + 44, '-');
+    unsigned width = 37;
+#if PRINT_CPU_USAGE
+    width += 7;
+#endif
+    const std::string delim = std::string(Printer::_nameColumnWidth + width, '-');
     os << delim << std::endl;
     os << name << std::endl;
     os << delim << std::endl;
 
     char s[2048];
-    sprintf(s, "%3s %-*s %6s %6s %10s %7s %6s\n", "st", Printer::_nameColumnWidth, "name",
-        "inc%", "exc%", "fps", "call/fr", "cpu%");
+    sprintf(s, "%3s %-*s %6s %6s %10s %7s\n", "st", Printer::_nameColumnWidth, "name",
+        "inc%", "exc%", "fps", "call/fr");
+#if PRINT_CPU_USAGE
+    sprintf(s + strlen() - 1, " %6s\n", "cpu%");
+#endif
     os << s;
 }
 void Printer::printStatHdr(std::ostream& os, const std::string& name)
 {
-    const std::string delim = std::string(Printer::_nameColumnWidth + 44, '-');
+    unsigned width = 37;
+#if PRINT_CPU_USAGE
+    width += 7;
+#endif
+    const std::string delim = std::string(Printer::_nameColumnWidth + width, '-');
     os << delim << std::endl;
     os << name << std::endl;
     os << delim << std::endl;
 
     char s[2048];
-    sprintf(s, "%3s %-*s %6s %6s %10s %7s %6s\n", "idx", Printer::_nameColumnWidth, "name",
-        "inc%", "exc%", "fps", "call/fr", "cpu%");
+    sprintf(s, "%3s %-*s %6s %6s %10s %7s\n", "idx", Printer::_nameColumnWidth, "name",
+        "inc%", "exc%", "fps", "call/fr");
+#if PRINT_CPU_USAGE
+    sprintf(s + strlen() - 1, " %6s\n", "cpu%");
+#endif
     os << s;
 }
 void Printer::printNode(std::ostream& os, const Node& node)

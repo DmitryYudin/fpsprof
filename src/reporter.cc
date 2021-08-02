@@ -84,7 +84,7 @@ bool Reporter::Deserialize(const char* filename)
             continue;
         }
         if (0 != strncmp(s, STREAM_PREFIX, strlen(STREAM_PREFIX))) {
-            if (0 == strncmp(s, PENALTY_PREFIX, strlen(PENALTY_PREFIX))) {                
+            if (0 == strncmp(s, PENALTY_PREFIX, strlen(PENALTY_PREFIX))) {
                 READ_LONG(s, _penalty_denom, return false)
                 READ_LONGLONG(s, _penalty_self_nsec, return false)
                 READ_LONGLONG(s, _penalty_children_nsec, return false)

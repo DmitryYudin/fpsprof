@@ -220,8 +220,6 @@ bool Node::collapse_recursion()
     parent->_children.splice(parent->_children.end(), std::move(_children));
     parent->_num_removed += _num_removed + _count_norec;
 
-//    parent->_num_removed += _count;
-
     while (parent != parent_recur) {
         parent->_realtime_used -= self_realtime_used;
         parent->_cpu_used -= self_cpu_used;
@@ -232,7 +230,6 @@ bool Node::collapse_recursion()
 
     return true;
 #endif
-    
 }
 
 Node* Node::CreateFull(std::list<RawEvent>&& rawEvents)
