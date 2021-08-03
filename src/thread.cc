@@ -1,5 +1,7 @@
 #include "thread.h"
 
+#include <inttypes.h>
+
 #include <ostream>
 #include <iomanip>
 #include <fstream>
@@ -126,6 +128,7 @@ void ThreadMap::Serialize(std::ostream& os) const
         int thread_id = threadEvents.first;
         const auto& events = threadEvents.second;
         for (const auto& event : events) {
+#if 0
             os  << STREAM_PREFIX << " "
                 << std::setw(2) << thread_id << " "
 
@@ -139,6 +142,20 @@ void ThreadMap::Serialize(std::ostream& os) const
                 << std::setw(0)
 
                 << std::endl;
+#else
+            char buf[1024];
+            sprintf(buf, STREAM_PREFIX" %d %d %d %u %s %" PRIu64" %" PRIu64" %" PRIu64"\n", 
+                thread_id,
+                event.frame_flag(),
+                event.measure_process_time(),
+                event.stack_level(),
+                event.name(),
+                event.start_nsec(),
+                event.stop_nsec(),
+                event.cpu_used()
+                );
+#endif
+            os << buf;
         }
     }
 }
