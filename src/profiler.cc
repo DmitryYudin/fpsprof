@@ -100,8 +100,8 @@ public:
     void set_report_file(const char* filename) {
         _report_filename = filename ? filename : "";
     }
-    void onThreadProfExit(std::list<ProfPoint>&& storage) {
-        _reporter.AddProfPoints(std::move(storage));
+    void onThreadProfExit(std::list<ProfPoint>&& marks) {
+        _reporter.AddProfPoints(std::move(marks));
     }
 private:
     FILE* _serialize = NULL;

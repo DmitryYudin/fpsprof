@@ -36,30 +36,9 @@
 
 namespace fpsprof {
 
-extern void GetPenalty(unsigned& penalty_denom, int64_t& penalty_self_nsec, int64_t& penalty_children_nsec);
-
 void Reporter::Serialize(std::ostream& os) const
 {
-    unsigned penalty_denom;
-    int64_t penalty_self_nsec, penalty_children_nsec;
-    GetPenalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
-
-    os << PENALTY_PREFIX << " "
-        << penalty_denom << " "
-        << penalty_self_nsec << " "
-        << penalty_children_nsec << " "
-        << std::endl;
-
-    for (const auto& threadEvents : _threadEventsMap) {
-        int thread_id = threadEvents.first;
-        const auto& events = threadEvents.second;
-        for (const auto& event : events) {
-            os << STREAM_PREFIX << " "
-                << std::setw(2) << thread_id << " "
-                << event
-                << std::endl;
-        }
-    }
+    SerializeThreadMap(os, _threadMap);
 }
 
 bool Reporter::Deserialize(const char* filename)
@@ -100,7 +79,7 @@ bool Reporter::Deserialize(const char* filename)
             fprintf(stderr, "parse fail at line %d\n", count);
             return false;
         }
-        _threadEventsMap[thread_id].push_back(event);
+        _threadMap[thread_id].push_back(event);
     }
 
     return true;
@@ -108,20 +87,12 @@ bool Reporter::Deserialize(const char* filename)
 
 void Reporter::AddProfPoints(std::list<ProfPoint>&& marks)
 {
-    if (marks.empty()) {
+    auto& events = Event::BuildEventList(std::move(marks));
+    if(events.empty()) {
         return;
     }
-
-    std::list<Event> events;
-    while (!marks.empty()) {
-        const auto& pp = marks.front();
-        assert(pp.complete());
-        events.push_back((Event)pp);
-        marks.pop_front();
-    }
-
-    int thread_id = (int)_threadEventsMap.size();
-    _threadEventsMap[thread_id] = std::move(events);
+    int thread_id = (int)_threadMap.size();
+    _threadMap[thread_id] = std::move(events);
 }
 
 void generate_reports(
@@ -133,7 +104,6 @@ void generate_reports(
     unsigned penalty_denom,
     uint64_t penalty_self_nsec,
     uint64_t penalty_children_nsec
-    
 )
 {
     for (auto& threadEvents : threadEventsMap) {
@@ -176,7 +146,7 @@ std::string Reporter::Report()
 try {
     std::vector< Node* > threadsFull, threadsNoRecur;
     std::vector< std::list<Stat*> > funcStatsFull, funcStatsNoRecur;
-    generate_reports(_threadEventsMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur,
+    generate_reports(_threadMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur,
         _penalty_denom, _penalty_self_nsec, _penalty_children_nsec);
 
     //const auto frameThread = threadsFull[0];

@@ -68,4 +68,58 @@ char* Event::desirialize(char *s)
     return s;
 }
 
+#define STREAM_PREFIX "prof:event:"
+#define PENALTY_PREFIX "prof:penalty:"
+
+
+extern void GetPenalty(unsigned& penalty_denom, int64_t& penalty_self_nsec, int64_t& penalty_children_nsec);
+
+void Event::SerializeHeader(std::ostream& os)
+{
+    unsigned penalty_denom;
+    int64_t penalty_self_nsec, penalty_children_nsec;
+    GetPenalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
+
+    os << PENALTY_PREFIX << " "
+        << penalty_denom << " "
+        << penalty_self_nsec << " "
+        << penalty_children_nsec << " "
+        << std::endl;
+
+
+}
+void Event::SerializeEventList(std::ostream& os, const std::list<Event>& events, int thread_id)
+{
+    for (const auto& event : events) {
+        os << STREAM_PREFIX << " "
+            << std::setw(2) << thread_id << " "
+            << event
+            << std::endl;
+    }
+}
+
+std::list<Event> Event::BuildEventList(std::list<ProfPoint>&& marks)
+{
+    std::list<Event> events;
+    while (!marks.empty()) {
+        const auto& pp = marks.front();
+        assert(pp.complete());
+        events.push_back((Event)pp);
+        marks.pop_front();
+    }
+    return events;
+}
+
+
+
+
+void SerializeThreadMap(std::ostream& os, const thread_map_t& threadMap)
+{
+    Event::SerializeHeader(os);
+    for (const auto& threadEvents : threadMap) {
+        int thread_id = threadEvents.first;
+        const auto& events = threadEvents.second;
+        Event::SerializeEventList(os, events, thread_id);
+    }
+}
 }
