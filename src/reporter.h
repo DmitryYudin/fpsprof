@@ -6,7 +6,7 @@
 #pragma once
 
 #include "profpoint.h"
-#include "events.h"
+#include "event.h"
 
 #include <string>
 #include <list>

@@ -6,7 +6,7 @@
 #define NOMINMAX
 
 #include "node.h"
-#include "events.h"
+#include "event.h"
 
 #include <assert.h>
 #include <string.h>
