@@ -105,7 +105,7 @@ std::string Printer::formatData(
 
 void Printer::printHdr(std::ostream& os, const std::string& name, const char *firstColumnName)
 {
-    unsigned width = 37;
+    unsigned width = 39;
 #if PRINT_CPU_USAGE
     width += 7;
 #endif

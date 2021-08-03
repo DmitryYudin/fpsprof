@@ -82,7 +82,7 @@ public:
             }
         }
     }
-    void get_penalty(unsigned& penalty_denom, int64_t& penalty_self_nsec, int64_t& penalty_children_nsec) {
+    void get_penalty(unsigned& penalty_denom, uint64_t& penalty_self_nsec, uint64_t& penalty_children_nsec) {
         penalty_denom = _penalty_denom;
         penalty_self_nsec = _penalty_self_nsec;
         penalty_children_nsec = _penalty_children_nsec;
@@ -101,7 +101,7 @@ public:
         _report_filename = filename ? filename : "";
     }
     void onThreadProfExit(std::list<ProfPoint>&& marks) {
-        _reporter.AddProfPoints(std::move(marks));
+        _reporter.AddRawThread(std::move(marks));
     }
 private:
     FILE* _serialize = NULL;
@@ -212,7 +212,7 @@ timer::wallclock_t ProfPoint::_init_wc = timer::wallclock::timestamp();
 static ThreadMgr gThreadMgr;
 static thread_local ThreadProf gThreadProf(gThreadMgr);
 
-extern void GetPenalty(unsigned& penalty_denom, int64_t& penalty_self_nsec, int64_t& penalty_children_nsec)
+extern void GetPenalty(unsigned& penalty_denom, uint64_t& penalty_self_nsec, uint64_t& penalty_children_nsec)
 {
     gThreadMgr.get_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
 }

@@ -24,21 +24,11 @@
 #include <algorithm>
 #include <exception>
 
-#define READ_NEXT_TOKEN(s, err_action) s = strtok(NULL, " "); if (!s) { err_action; };
-#define READ_NUMERIC(s, val, err_action, strtoNum) \
-    READ_NEXT_TOKEN(s, err_action) \
-    { char* end; val = strtoNum(s, &end, 10); if (*end != '\0') { err_action; } }
-#define READ_LONG(s, val, err_action) READ_NUMERIC(s, val, err_action, strtol)
-#define READ_LONGLONG(s, val, err_action) READ_NUMERIC(s, val, err_action, strtoll)
-
-#define STREAM_PREFIX "prof:event:"
-#define PENALTY_PREFIX "prof:penalty:"
-
 namespace fpsprof {
 
-void Reporter::Serialize(std::ostream& os) const
+void Reporter::AddRawThread(std::list<ProfPoint>&& marks)
 {
-    SerializeThreadMap(os, _threadMap);
+    _threadMap.AddRawThread(std::move(marks));
 }
 
 bool Reporter::Deserialize(const char* filename)
@@ -50,63 +40,28 @@ bool Reporter::Deserialize(const char* filename)
     if (!ifs.is_open()) {
         return false;
     }
-    char line[2048];
-    unsigned count = 0;
-    while (!ifs.getline(line, sizeof(line)).eof()) {
-        if (ifs.fail()) {
-            return false;
-        }
-        count++;
-
-        char* s = strtok(line, " ");
-        if (!s) {
-            continue;
-        }
-        if (0 != strncmp(s, STREAM_PREFIX, strlen(STREAM_PREFIX))) {
-            if (0 == strncmp(s, PENALTY_PREFIX, strlen(PENALTY_PREFIX))) {
-                READ_LONG(s, _penalty_denom, return false)
-                READ_LONGLONG(s, _penalty_self_nsec, return false)
-                READ_LONGLONG(s, _penalty_children_nsec, return false)
-            }
-            continue;
-        }
-
-        int thread_id;
-        READ_LONG(s, thread_id, return false)
-
-        Event event;
-        if (!event.desirialize(s)) {
-            fprintf(stderr, "parse fail at line %d\n", count);
-            return false;
-        }
-        _threadMap[thread_id].push_back(event);
-    }
-
-    return true;
+    
+    return _threadMap.Deserialize(ifs);
 }
 
-void Reporter::AddProfPoints(std::list<ProfPoint>&& marks)
+void Reporter::Serialize(std::ostream& os) const
 {
-    auto& events = Event::BuildEventList(std::move(marks));
-    if(events.empty()) {
-        return;
-    }
-    int thread_id = (int)_threadMap.size();
-    _threadMap[thread_id] = std::move(events);
+    _threadMap.Serialize(os);
 }
 
 void generate_reports(
-    std::map<int, std::list<Event> >& threadEventsMap,
+    ThreadMap& threadMap,
     std::vector< Node* >& threadsFull,
     std::vector< Node* >& threadsNoRecur,
     std::vector< std::list< Stat* > >& funcStatsFull,
-    std::vector< std::list< Stat* > >& funcStatsNoRecur,
-    unsigned penalty_denom,
-    uint64_t penalty_self_nsec,
-    uint64_t penalty_children_nsec
+    std::vector< std::list< Stat* > >& funcStatsNoRecur
 )
 {
-    for (auto& threadEvents : threadEventsMap) {
+    unsigned penalty_denom = threadMap.reported_penalty_denom();
+    uint64_t penalty_self_nsec = threadMap.reported_penalty_self_nsec();
+    uint64_t penalty_children_nsec = threadMap.reported_penalty_children_nsec();
+    
+    for (auto& threadEvents : threadMap) {
         auto& events = threadEvents.second;
 
         auto rootFull = Node::CreateFull(std::move(events));
@@ -140,17 +95,14 @@ void generate_reports(
     }
 }
 
-std::string Reporter::Report()
+std::string Reporter::report()
 {
-    fprintf(stderr, "Generate reports\n");
-try {
     std::vector< Node* > threadsFull, threadsNoRecur;
     std::vector< std::list<Stat*> > funcStatsFull, funcStatsNoRecur;
-    generate_reports(_threadMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur,
-        _penalty_denom, _penalty_self_nsec, _penalty_children_nsec);
+    generate_reports(_threadMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur);
 
     //const auto frameThread = threadsFull[0];
-const auto frameThread = threadsNoRecur[0];
+    const auto frameThread = threadsNoRecur[0];
     if(frameThread->children().empty()) { // root only
         return "";
     }
@@ -184,10 +136,16 @@ const auto frameThread = threadsNoRecur[0];
 #else
     return ss.str();
 #endif
-} catch (std::exception& e) {
-    fprintf(stderr, "exception: %s\n", e.what());
-    return "";
-}
 }
 
+std::string Reporter::Report()
+{
+    fprintf(stderr, "Generate reports\n");
+    try {
+        return this->report();
+    } catch (std::exception& e) {
+        fprintf(stderr, "exception: %s\n", e.what());
+        return "";
+    }
+}
 }

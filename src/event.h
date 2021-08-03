@@ -32,10 +32,6 @@ public:
     Event()
         : _name(NULL) { // this is for deserialization only, since we to not want to use exceptions
     }
-    static void SerializeHeader(std::ostream& os);
-    static void SerializeEventList(std::ostream& os, const std::list<Event>& events, int thread_id);
-    static std::list<Event> BuildEventList(std::list<ProfPoint>&& marks);
-
     const char* name() const { return _name; }
     int stack_level() const { return _stack_level; }
     bool frame_flag() const { return _frame_flag; }
@@ -44,7 +40,6 @@ public:
     uint64_t stop_nsec() const { return _stop_nsec; }
     uint64_t cpu_used() const { return _cpu_used; }
 
-    friend std::ostream& operator<<(std::ostream& os, const Event& event);
     char* desirialize(char* s); // ~= strtok, returns NULL on failure
 
 //protected:
@@ -76,9 +71,5 @@ protected:
     uint64_t _stop_nsec;
     uint64_t _cpu_used;
 };
-
-typedef std::map<int, std::list<Event> > thread_map_t;
-
-void SerializeThreadMap(std::ostream& os, const thread_map_t& threadMap);
 
 }

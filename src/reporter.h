@@ -6,7 +6,7 @@
 #pragma once
 
 #include "profpoint.h"
-#include "event.h"
+#include "thread.h"
 
 #include <string>
 #include <list>
@@ -17,19 +17,17 @@ namespace fpsprof {
 
 class Reporter {
 public:
-    void Serialize(std::ostream& os) const;
+    void AddRawThread(std::list<ProfPoint>&& marks);
     bool Deserialize(const char* filename);
 
-    void AddProfPoints(std::list<ProfPoint>&& marks);
+    void Serialize(std::ostream& os) const;
 
     // one-shot (destroy data on return)
     std::string Report();
 
 private:
-    unsigned _penalty_denom = 0;
-    int64_t _penalty_self_nsec = 0, _penalty_children_nsec = 0;
-
-    thread_map_t _threadMap;
+    std::string report();
+    ThreadMap _threadMap;
 };
 
 }
