@@ -29,7 +29,8 @@ public:
         }
     }
 
-    uint64_t wc_penalty = 0;
+    timer::wallclock_t get_overhead_wc() const { return _alloc_overhead_wc; }
+
     item_t* alloc_item() {
         assert(!_reading);
         item_t* item = &current_page[_next_idx & page_mask];
@@ -41,7 +42,7 @@ public:
                 uint64_t wc = timer::wallclock::timestamp();
                 current_page = page_alloc(); // caller is responsible to manage reserve()
                 _pages.push_back(current_page);
-                wc_penalty += timer::wallclock::timestamp() - wc;
+                _alloc_overhead_wc += timer::wallclock::timestamp() - wc;
             }
         }
         return item;
@@ -66,13 +67,13 @@ public:
                 _next_page--; // set to first preallocated
             }
         } while (num_pages_minus1--);
-        wc_penalty += timer::wallclock::timestamp() - wc;
+        _alloc_overhead_wc += timer::wallclock::timestamp() - wc;
     }
 
     std::list<item_t> to_list() { // destructive
         std::list<item_t> out;
 #ifndef NDEBUG
-        printf("storage penalty = %.8f sec\n", timer::wallclock::diff(wc_penalty, 0)*1e-9);
+        printf("alloc overhead = %.8f sec\n", timer::wallclock::diff(_alloc_overhead_wc, 0)*1e-9);
 #endif
         if (_next_idx == 0 || _reading) { // read once
             return out;
@@ -121,5 +122,6 @@ private:
     item_t* current_page = page_alloc();
     std::list<item_t*> _pages;
     typename std::list<item_t*>::iterator _next_page = _pages.end();
+    timer::wallclock_t _alloc_overhead_wc = 0;
 };
 }

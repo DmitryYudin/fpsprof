@@ -40,6 +40,8 @@ private:
     );
     static std::string formatName(const char *name, unsigned stack_level, unsigned num_recursions);
 
+    static void printHdr(std::ostream& os, const std::string& name, const char *firstColumnName);
+
     static unsigned _nameColumnWidth;
     static uint64_t _frameRealTimeUsed;
     static unsigned _frameCount;

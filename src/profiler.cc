@@ -100,8 +100,8 @@ public:
     void set_report_file(const char* filename) {
         _report_filename = filename ? filename : "";
     }
-    void onThreadProfExit(std::list<ProfPoint>&& marks) {
-        _reporter.AddProfPoints(std::move(marks));
+    void onThreadProfExit(std::list<ProfPoint>&& storage) {
+        _reporter.AddProfPoints(std::move(storage));
     }
 private:
     FILE* _serialize = NULL;
@@ -120,39 +120,38 @@ struct ThreadProf {
     explicit ThreadProf(ThreadMgr& threadMgr) : _threadMgr(threadMgr) {
     }
     ~ThreadProf() {
-        if (_marks.size() == 0) {
+        if (_storage.size() == 0) {
             return;
         }
-        std::list<ProfPoint> marks;
+        std::list<ProfPoint> storage;
 #if !USE_FASTWRITE_STORAGE
-        marks = std::move(_marks);
+        storage = std::move(_storage);
 #else
-        marks = _marks.to_list();
+        storage = _storage.to_list();
 #endif
-        _threadMgr.onThreadProfExit(std::move(marks));
+        _threadMgr.onThreadProfExit(std::move(storage));
     }
 
     ProfPoint* push(const char* name, bool frame_flag) {
         bool measure_process_time = false;
 #if !USE_FASTWRITE_STORAGE
-        _marks.emplace_back(name, _stack_level++, frame_flag, measure_process_time);
-        ProfPoint* pp = &_marks.back(); // safe for a list<>
+        _storage.emplace_back(name, _stack_level++, frame_flag, measure_process_time);
+        ProfPoint* pp = &_storage.back(); // safe for a list<>
 #else
         if (_stack_level == 0) {
-            unsigned events_count = _marks.size();
+            unsigned events_count = _storage.size();
             unsigned events_num = events_count - _events_count_prev;
             _events_num_max = std::max(_events_num_max, events_num);
             _events_count_prev = events_count;
-            _marks.reserve(3 * _events_num_max);
+            _storage.reserve(3 * _events_num_max);
         }
-        ProfPoint* pp = _marks.alloc_item();
+        ProfPoint* pp = _storage.alloc_item();
         *pp = ProfPoint(name, _stack_level++, frame_flag, measure_process_time);
 #endif
 #ifndef NDEBUG
         _pp_last_in = pp;
 #endif
-        pp->Start();
-        pp->_start_wc -= _marks.wc_penalty;
+        pp->Start(_storage.get_overhead_wc());
         return pp;
     }
     void pop(ProfPoint* pp) {
@@ -161,8 +160,7 @@ struct ThreadProf {
         if (pp->stack_level() != _stack_level) {
             panic_and_exit(pp);
         }
-        pp->_start_wc += _marks.wc_penalty;
-        pp->Stop();
+        pp->Stop(_storage.get_overhead_wc());
 #ifndef NDEBUG
         _pp_last_out = pp;
 #endif
@@ -171,13 +169,13 @@ private:
     void panic_and_exit(ProfPoint* pp) {
         const char* exit_name = pp->name();
         unsigned exit_level = pp->stack_level();
-        std::list<ProfPoint> marks;
+        std::list<ProfPoint> storage;
 #if !USE_FASTWRITE_STORAGE
-        marks = std::move(_marks);
+        storage = std::move(_storage);
 #else
-        marks = _marks.to_list();
+        storage = _storage.to_list();
 #endif
-        for (const auto& mark : marks) {
+        for (const auto& mark : storage) {
             if (mark.complete()) {
                 continue;
             }
@@ -195,9 +193,9 @@ private:
     }
     ThreadMgr& _threadMgr;
 #if !USE_FASTWRITE_STORAGE
-    std::list<ProfPoint> _marks;
+    std::list<ProfPoint> _storage;
 #else
-    fastwrite_storage_t<ProfPoint> _marks;
+    fastwrite_storage_t<ProfPoint> _storage;
 #endif
 
     int _stack_level = 0;

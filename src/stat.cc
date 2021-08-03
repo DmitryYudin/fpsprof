@@ -8,7 +8,7 @@
 #include "stat.h"
 #include "node.h"
 
-#include "assert.h"
+#include <assert.h>
 #include <stdexcept>
 #include <algorithm>
 

@@ -79,9 +79,9 @@ std::string Printer::formatData(
     char callsPerFrame[32];
     if(_frameCount > 0) {
         double n = ((double)count) / _frameCount;
-        sprintf(callsPerFrame, "%7.2f", n);
+        sprintf(callsPerFrame, "%9.2f", n);
     } else {
-        sprintf(callsPerFrame, "%7s", NA);
+        sprintf(callsPerFrame, "%9s", NA);
     }
     char cpuP[32];
     if (realtime_used > 0) {
@@ -103,7 +103,7 @@ std::string Printer::formatData(
     return res;
 }
 
-void Printer::printTreeHdr(std::ostream& os, const std::string& name)
+void Printer::printHdr(std::ostream& os, const std::string& name, const char *firstColumnName)
 {
     unsigned width = 37;
 #if PRINT_CPU_USAGE
@@ -115,32 +115,15 @@ void Printer::printTreeHdr(std::ostream& os, const std::string& name)
     os << delim << std::endl;
 
     char s[2048];
-    sprintf(s, "%3s %-*s %6s %6s %10s %7s\n", "st", Printer::_nameColumnWidth, "name",
+    sprintf(s, "%3s %-*s %6s %6s %10s %9s\n", firstColumnName, Printer::_nameColumnWidth, "name",
         "inc%", "exc%", "fps", "call/fr");
 #if PRINT_CPU_USAGE
     sprintf(s + strlen() - 1, " %6s\n", "cpu%");
 #endif
     os << s;
 }
-void Printer::printStatHdr(std::ostream& os, const std::string& name)
-{
-    unsigned width = 37;
-#if PRINT_CPU_USAGE
-    width += 7;
-#endif
-    const std::string delim = std::string(Printer::_nameColumnWidth + width, '-');
-    os << delim << std::endl;
-    os << name << std::endl;
-    os << delim << std::endl;
-
-    char s[2048];
-    sprintf(s, "%3s %-*s %6s %6s %10s %7s\n", "idx", Printer::_nameColumnWidth, "name",
-        "inc%", "exc%", "fps", "call/fr");
-#if PRINT_CPU_USAGE
-    sprintf(s + strlen() - 1, " %6s\n", "cpu%");
-#endif
-    os << s;
-}
+void Printer::printTreeHdr(std::ostream& os, const std::string& name) { Printer::printHdr(os, name, "st"); }
+void Printer::printStatHdr(std::ostream& os, const std::string& name) { Printer::printHdr(os, name, "idx"); }
 void Printer::printNode(std::ostream& os, const Node& node)
 {
     os  << std::setw(3) << node.stack_level() << " " 

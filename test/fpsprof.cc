@@ -22,6 +22,15 @@ static void usage(void)
     );
 }
 
+static bool check_file_exist(const char *filename)
+{
+    FILE *fp = fopen(filename, "r");
+    if(fp) {
+        fclose(fp);
+    }
+    return fp != NULL;
+
+}
 #ifdef NDEBUG
 #define TRACE_ERR(cond, fmt, ...) if (cond) { fprintf(stderr, "error:" fmt "\n", ##__VA_ARGS__); return 1; }
 #else
@@ -73,12 +82,14 @@ int main(int argc, char *argv[])
     }
 
     TRACE_ERR(filename == NULL, "input file name required")
+    TRACE_ERR(!check_file_exist(filename), "input file does not exist")
 
     fpsprof::Reporter reporter;
-    TRACE_ERR(!reporter.Deserialize(filename), "failed to parse proliler log: %s", filename)
+    TRACE_ERR(!reporter.Deserialize(filename), "failed to parse profiler log: %s", filename)
 
     std::string report = reporter.Report();
     printf("%s\n", report.c_str());
+
 
     return 0;
 }
