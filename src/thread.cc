@@ -8,8 +8,8 @@
 
 namespace fpsprof {
 
-#define STREAM_PREFIX "prof:event:"
-#define PENALTY_PREFIX "prof:penalty:"
+#define EVENT_PREFIX "E:"
+#define PENALTY_PREFIX "P:"
 
 extern void GetPenalty(unsigned& penalty_denom, uint64_t& penalty_self_nsec, uint64_t& penalty_children_nsec);
 
@@ -78,30 +78,29 @@ bool ThreadMap::Deserialize(std::ifstream& ifs)
         if (!s) {
             continue;
         }
-        if (0 != strncmp(s, STREAM_PREFIX, strlen(STREAM_PREFIX))) {
-            if (0 == strncmp(s, PENALTY_PREFIX, strlen(PENALTY_PREFIX))) {
-                READ_LONG(s, _penalty_denom, goto error_exit)
-                READ_LONGLONG(s, _penalty_self_nsec, goto error_exit)
-                READ_LONGLONG(s, _penalty_children_nsec, goto error_exit)
-            }
-            continue;
-        }
+        if (0 == strncmp(s, PENALTY_PREFIX, strlen(PENALTY_PREFIX))) {
+            READ_LONG(s, _penalty_denom, goto error_exit)
+            READ_LONGLONG(s, _penalty_self_nsec, goto error_exit)
+            READ_LONGLONG(s, _penalty_children_nsec, goto error_exit)
+        } else if (0 == strncmp(s, EVENT_PREFIX, strlen(EVENT_PREFIX))) {
+            int thread_id;
+            READ_LONG(s, thread_id, goto error_exit)
 
-        int thread_id;
-        READ_LONG(s, thread_id, goto error_exit)
-
-        Event event;
-        READ_LONG(s, event._frame_flag, goto error_exit)
-        READ_LONG(s, event._measure_process_time, goto error_exit)
-        READ_LONG(s, event._stack_level, goto error_exit)
-        std::string name_str;
-        READ_NEXT_TOKEN(s, goto error_exit) name_str = s;
-        READ_LONGLONG(s, event._start_nsec, goto error_exit)
-        READ_LONGLONG(s, event._stop_nsec, goto error_exit)
-        READ_LONGLONG(s, event._cpu_used, goto error_exit)
-        event._name = hash_event_name(name_str);
+            Event event;
+            READ_LONG(s, event._frame_flag, goto error_exit)
+            READ_LONG(s, event._measure_process_time, goto error_exit)
+            READ_LONG(s, event._stack_level, goto error_exit)
+            std::string name_str;
+            READ_NEXT_TOKEN(s, goto error_exit) name_str = s;
+            READ_LONGLONG(s, event._start_nsec, goto error_exit)
+            READ_LONGLONG(s, event._stop_nsec, goto error_exit)
+            READ_LONGLONG(s, event._cpu_used, goto error_exit)
+            event._name = hash_event_name(name_str);
         
-        operator[](thread_id).push_back(event);
+            operator[](thread_id).push_back(event);
+        } else {
+            goto error_exit;
+        }
     }
 
     assert(_penalty_denom);
@@ -128,23 +127,8 @@ void ThreadMap::Serialize(std::ostream& os) const
         int thread_id = threadEvents.first;
         const auto& events = threadEvents.second;
         for (const auto& event : events) {
-#if 0
-            os  << STREAM_PREFIX << " "
-                << std::setw(2) << thread_id << " "
-
-                << std::setw(1) << event.frame_flag() << " "
-                << std::setw(1) << event.measure_process_time() << " "
-                << std::setw(2) << event.stack_level() << " "
-                << std::setw(20) << std::left << event.name() << std::right << " "
-                << std::setw(14) << event.start_nsec() << " "
-                << std::setw(14) << event.stop_nsec() << " "
-                << std::setw(12) << event.cpu_used() << " "
-                << std::setw(0)
-
-                << std::endl;
-#else
             char buf[1024];
-            sprintf(buf, STREAM_PREFIX" %d %d %d %u %s %" PRIu64" %" PRIu64" %" PRIu64"\n", 
+            sprintf(buf, EVENT_PREFIX " %d %d %d %u %s %" PRIu64" %" PRIu64" %" PRIu64"\n", 
                 thread_id,
                 event.frame_flag(),
                 event.measure_process_time(),
@@ -154,7 +138,6 @@ void ThreadMap::Serialize(std::ostream& os) const
                 event.stop_nsec(),
                 event.cpu_used()
                 );
-#endif
             os << buf;
         }
     }
