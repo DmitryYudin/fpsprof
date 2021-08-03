@@ -11,16 +11,16 @@
 
 namespace fpsprof {
 
-class RawEvent;
+class Event;
 
 class Node {
 public:
-    static Node* CreateFull(std::list<RawEvent>&& rawEvents);
+    static Node* CreateFull(std::list<Event>&& events);
     static Node* CreateNoRecur(const Node& root);
     static void MitigateCounterPenalty(Node& root, unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec);
 
     Node();
-    Node(const RawEvent& rawEvent, Node& parent);
+    Node(const Event& rawEvent, Node& parent);
     Node(const Node&) = delete;
     Node(Node&&) = default;
     Node& operator= (Node&) = delete;
@@ -52,7 +52,7 @@ public:
     Node* deep_copy(Node* parent) const;
 
 protected:
-    Node& add_child(const RawEvent& rawEvent);
+    Node& add_child(const Event& event);
     void merge_children(bool strict);
     void merge_self(Node&& node, bool strict);
 

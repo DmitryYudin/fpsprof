@@ -50,9 +50,9 @@ void Reporter::Serialize(std::ostream& os) const
         << penalty_children_nsec << " "
         << std::endl;
 
-    for (const auto& rawEvents : _rawThreadMap) {
-        int thread_id = rawEvents.first;
-        const auto& events = rawEvents.second;
+    for (const auto& threadEvents : _threadEventsMap) {
+        int thread_id = threadEvents.first;
+        const auto& events = threadEvents.second;
         for (const auto& event : events) {
             os << STREAM_PREFIX << " "
                 << std::setw(2) << thread_id << " "
@@ -95,12 +95,12 @@ bool Reporter::Deserialize(const char* filename)
         int thread_id;
         READ_LONG(s, thread_id, return false)
 
-        RawEvent event;
+        Event event;
         if (!event.desirialize(s)) {
             fprintf(stderr, "parse fail at line %d\n", count);
             return false;
         }
-        _rawThreadMap[thread_id].push_back(event);
+        _threadEventsMap[thread_id].push_back(event);
     }
 
     return true;
@@ -112,20 +112,20 @@ void Reporter::AddProfPoints(std::list<ProfPoint>&& marks)
         return;
     }
 
-    std::list<RawEvent> rawEvents;
+    std::list<Event> events;
     while (!marks.empty()) {
         const auto& pp = marks.front();
         assert(pp.complete());
-        rawEvents.push_back((RawEvent)pp);
+        events.push_back((Event)pp);
         marks.pop_front();
     }
 
-    int thread_id = (int)_rawThreadMap.size();
-    _rawThreadMap[thread_id] = std::move(rawEvents);
+    int thread_id = (int)_threadEventsMap.size();
+    _threadEventsMap[thread_id] = std::move(events);
 }
 
 void generate_reports(
-    std::map<int, std::list<RawEvent> >& rawThreadMap,
+    std::map<int, std::list<Event> >& threadEventsMap,
     std::vector< Node* >& threadsFull,
     std::vector< Node* >& threadsNoRecur,
     std::vector< std::list< Stat* > >& funcStatsFull,
@@ -136,10 +136,10 @@ void generate_reports(
     
 )
 {
-    for (auto& rawEventsItem : rawThreadMap) {
-        auto& rawEvents = rawEventsItem.second;
+    for (auto& threadEvents : threadEventsMap) {
+        auto& events = threadEvents.second;
 
-        auto rootFull = Node::CreateFull(std::move(rawEvents));
+        auto rootFull = Node::CreateFull(std::move(events));
         auto rootNoRecur = Node::CreateNoRecur(*rootFull);
 
         Node::MitigateCounterPenalty(*rootFull, penalty_denom, penalty_self_nsec, penalty_children_nsec);
@@ -176,7 +176,7 @@ std::string Reporter::Report()
 try {
     std::vector< Node* > threadsFull, threadsNoRecur;
     std::vector< std::list<Stat*> > funcStatsFull, funcStatsNoRecur;
-    generate_reports(_rawThreadMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur,
+    generate_reports(_threadEventsMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur,
         _penalty_denom, _penalty_self_nsec, _penalty_children_nsec);
 
     //const auto frameThread = threadsFull[0];

@@ -36,15 +36,15 @@ Node::Node()
     , _count_norec(0)
 {
 }
-Node::Node(const RawEvent& rawEvent, Node& parent)
-    : _name(rawEvent.name())
-    , _stack_level(rawEvent.stack_level())
-    , _frame_flag(rawEvent.frame_flag())
-    , _measure_process_time(rawEvent.measure_process_time())
-    , _realtime_used(rawEvent.stop_nsec() - rawEvent.start_nsec())
-    , _cpu_used(rawEvent.cpu_used())
+Node::Node(const Event& event, Node& parent)
+    : _name(event.name())
+    , _stack_level(event.stack_level())
+    , _frame_flag(event.frame_flag())
+    , _measure_process_time(event.measure_process_time())
+    , _realtime_used(event.stop_nsec() - event.start_nsec())
+    , _cpu_used(event.cpu_used())
     , _parent_path(parent.self_path())
-    , _self_path("/" + rawEvent.make_hash() + _parent_path)
+    , _self_path("/" + event.make_hash() + _parent_path)
     //, _stack_pos(parent.num_children())
     , _parent(&parent)
     , _count(1)
@@ -55,16 +55,16 @@ Node::Node(const RawEvent& rawEvent, Node& parent)
 {
 }
 
-Node& Node::add_child(const RawEvent& rawEvent)
+Node& Node::add_child(const Event& event)
 {
-    if (rawEvent.stack_level() != _stack_level + 1) {
+    if (event.stack_level() != _stack_level + 1) {
         assert(!"not a direct child");
     }
-    if (rawEvent.measure_process_time() && !_measure_process_time) {
+    if (event.measure_process_time() && !_measure_process_time) {
         assert(!"stack level increase resulted in counter change "
             "from thread time to process time");
     }
-    _children.emplace_back(rawEvent, *this);
+    _children.emplace_back(event, *this);
 
     return _children.back();
 }
@@ -232,21 +232,21 @@ bool Node::collapse_recursion()
 #endif
 }
 
-Node* Node::CreateFull(std::list<RawEvent>&& rawEvents)
+Node* Node::CreateFull(std::list<Event>&& events)
 {
     Node *root = new Node();
     std::stack<Node*> stack;
     stack.push(root);
-    while (!rawEvents.empty()) {
-        auto& rawEvent = rawEvents.front();
-        while (stack.top()->stack_level() >= rawEvent.stack_level()) {
+    while (!events.empty()) {
+        auto& event = events.front();
+        while (stack.top()->stack_level() >= event.stack_level()) {
             stack.pop();
             if(stack.empty()) {
                 throw std::runtime_error("broken event list");
             }
         }
-        stack.push(&stack.top()->Node::add_child(rawEvent));
-        rawEvents.pop_front();
+        stack.push(&stack.top()->Node::add_child(event));
+        events.pop_front();
     }
 
     root->merge_children(true);

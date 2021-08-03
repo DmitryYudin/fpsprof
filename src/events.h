@@ -18,9 +18,9 @@ namespace fpsprof {
 struct ProfPoint;
 
 // Some common stuff we always want to access + serialize/desirialize
-class RawEvent {
+class Event {
 public:
-    explicit RawEvent(const ProfPoint& pp)
+    explicit Event(const ProfPoint& pp)
         : _name(pp.name())
         , _stack_level(pp.stack_level())
         , _frame_flag(pp.frame_flag())
@@ -29,7 +29,7 @@ public:
         , _stop_nsec(pp.realtime_stop())
         , _cpu_used(pp.cputime_delta()) {
     }
-    RawEvent()
+    Event()
         : _name(NULL) { // this is for deserialization only, since we to not want to use exceptions
     }
 
@@ -41,7 +41,7 @@ public:
     uint64_t stop_nsec() const { return _stop_nsec; }
     uint64_t cpu_used() const { return _cpu_used; }
 
-    friend std::ostream& operator<<(std::ostream& os, const RawEvent& event);
+    friend std::ostream& operator<<(std::ostream& os, const Event& event);
     char* desirialize(char* s); // ~= strtok, returns NULL on failure
 
 //protected:

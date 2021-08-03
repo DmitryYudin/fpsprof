@@ -20,7 +20,7 @@
 
 namespace fpsprof {
 
-std::ostream& operator<<(std::ostream& os, const RawEvent& event)
+std::ostream& operator<<(std::ostream& os, const Event& event)
 {
     os << std::setw(1) << event.frame_flag() << " "
         << std::setw(1) << event.measure_process_time() << " "
@@ -41,7 +41,7 @@ std::ostream& operator<<(std::ostream& os, const RawEvent& event)
 #define READ_LONG(s, val, err_action) READ_NUMERIC(s, val, err_action, strtol)
 #define READ_LONGLONG(s, val, err_action) READ_NUMERIC(s, val, err_action, strtoll)
 
-char* RawEvent::desirialize(char *s)
+char* Event::desirialize(char *s)
 {
     std::string name_str;
     READ_LONG(s, _frame_flag, return NULL)
