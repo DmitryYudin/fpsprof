@@ -334,7 +334,6 @@ unsigned Node::mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty
     _has_penalty = false;
 
     return numChildrenFull + _count_norec + _num_removed;
-    //return numChildrenFull + _count + _num_removed;
 }
 void Node::MitigateCounterPenalty(Node& root, unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec)
 {

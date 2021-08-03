@@ -41,6 +41,25 @@ void ThreadMap::AddRawThread(std::list<ProfPoint>&& marks)
 #define READ_LONG(s, val, err_action) READ_NUMERIC(s, val, err_action, strtol)
 #define READ_LONGLONG(s, val, err_action) READ_NUMERIC(s, val, err_action, strtoll)
 
+static const char* hash_event_name(const std::string& name_str)
+{
+    static std::map<std::string, const char*> cache;
+    auto it = cache.find(name_str);
+    const char* name;
+    if (it != cache.end()) {
+        name = it->second;
+    } else {
+        if (cache.size() == 0) { // sanitary
+            atexit([]() { for (auto& x : cache) { delete[] x.second; }; cache.clear(); });
+        }
+        char* val = new char[name_str.size() + 1];
+        strcpy(val, name_str.c_str());
+        cache[name_str] = val;
+        name = val;
+    }
+    return name;
+}
+
 bool ThreadMap::Deserialize(std::ifstream& ifs)
 {
     assert(_penalty_denom == 0);
@@ -59,21 +78,26 @@ bool ThreadMap::Deserialize(std::ifstream& ifs)
         }
         if (0 != strncmp(s, STREAM_PREFIX, strlen(STREAM_PREFIX))) {
             if (0 == strncmp(s, PENALTY_PREFIX, strlen(PENALTY_PREFIX))) {
-                READ_LONG(s, _penalty_denom, return false)
-                READ_LONGLONG(s, _penalty_self_nsec, return false)
-                READ_LONGLONG(s, _penalty_children_nsec, return false)
+                READ_LONG(s, _penalty_denom, goto error_exit)
+                READ_LONGLONG(s, _penalty_self_nsec, goto error_exit)
+                READ_LONGLONG(s, _penalty_children_nsec, goto error_exit)
             }
             continue;
         }
 
         int thread_id;
-        READ_LONG(s, thread_id, return false)
+        READ_LONG(s, thread_id, goto error_exit)
 
         Event event;
-        if (!event.desirialize(s)) {
-            fprintf(stderr, "parse fail at line %d\n", count);
-            return false;
-        }
+        READ_LONG(s, event._frame_flag, goto error_exit)
+        READ_LONG(s, event._measure_process_time, goto error_exit)
+        READ_LONG(s, event._stack_level, goto error_exit)
+        std::string name_str;
+        READ_NEXT_TOKEN(s, goto error_exit) name_str = s;
+        READ_LONGLONG(s, event._start_nsec, goto error_exit)
+        READ_LONGLONG(s, event._stop_nsec, goto error_exit)
+        READ_LONGLONG(s, event._cpu_used, goto error_exit)
+        event._name = hash_event_name(name_str);
         
         operator[](thread_id).push_back(event);
     }
@@ -81,6 +105,11 @@ bool ThreadMap::Deserialize(std::ifstream& ifs)
     assert(_penalty_denom);
 
     return true;
+
+error_exit:
+    fprintf(stderr, "parse fail at line %d\n", count);
+
+    return false;
 }
 
 void ThreadMap::Serialize(std::ostream& os) const

@@ -19,6 +19,7 @@ struct ProfPoint;
 
 // Some common stuff we always want to access + serialize/desirialize
 class Event {
+    friend struct ThreadMap; // desirialize
 public:
     explicit Event(const ProfPoint& pp)
         : _name(pp.name())
@@ -39,8 +40,6 @@ public:
     uint64_t start_nsec() const { return _start_nsec; }
     uint64_t stop_nsec() const { return _stop_nsec; }
     uint64_t cpu_used() const { return _cpu_used; }
-
-    char* desirialize(char* s); // ~= strtok, returns NULL on failure
 
 protected:
     const char* _name;
