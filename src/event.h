@@ -8,10 +8,6 @@
 #include "profpoint.h"
 
 #include <stdint.h>
-#include <ostream>
-#include <list>
-#include <string>
-#include <map>
 
 namespace fpsprof {
 

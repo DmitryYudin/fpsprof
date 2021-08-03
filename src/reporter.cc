@@ -106,8 +106,10 @@ std::string Reporter::report()
     if(frameThread->children().empty()) { // root only
         return "";
     }
-    const auto& frameNode = frameThread->children().front();
-
+    {
+        const auto& frameNode = frameThread->children().front();
+        Printer::setFrameCounters(frameNode.realtime_used(), frameNode.count());
+    }
     {
         unsigned stackLevelMax = 0, nameLengthMax = 0;
         for (const auto& node : threadsFull) {
@@ -115,7 +117,6 @@ std::string Reporter::report()
             nameLengthMax = std::max(nameLengthMax, node->name_len_max());
         }
         Printer::setNameColumnWidth(nameLengthMax, stackLevelMax, 0);
-        Printer::setFrameCounters(frameNode.realtime_used(), frameNode.count());
     }
 
 #define DEBUG_REPORT 0
@@ -140,7 +141,7 @@ std::string Reporter::report()
 
 std::string Reporter::Report()
 {
-    fprintf(stderr, "Generate reports\n");
+    fprintf(stderr, "Generating reports\n");
     try {
         return this->report();
     } catch (std::exception& e) {

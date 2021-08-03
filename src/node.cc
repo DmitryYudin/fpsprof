@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stack>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <stdexcept>
 

@@ -5,6 +5,7 @@
 
 #include <list>
 #include <map>
+#include <iostream>
 
 namespace fpsprof {
 
@@ -25,7 +26,5 @@ private:
     uint64_t _penalty_self_nsec = 0;
     uint64_t _penalty_children_nsec = 0;
 };
-
-
 
 }
