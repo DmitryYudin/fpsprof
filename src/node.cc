@@ -18,6 +18,7 @@
 namespace fpsprof {
 
 static const char rootNodeName[] = "<root>";
+
 Node::Node()
     : _name(rootNodeName)
     , _stack_level(-1)
@@ -25,9 +26,10 @@ Node::Node()
     , _measure_process_time(false)
     , _realtime_used(0)
     , _cpu_used(0)
+#ifndef NDEBUG
     , _parent_path("")
     , _self_path("")
-    //, _stack_pos(0)
+#endif
     , _parent(NULL)
     , _count(0)
     , _num_recursions(0)
@@ -43,9 +45,10 @@ Node::Node(const Event& event, Node& parent)
     , _measure_process_time(event.measure_process_time())
     , _realtime_used(event.stop_nsec() - event.start_nsec())
     , _cpu_used(event.cpu_used())
+#ifndef NDEBUG
     , _parent_path(parent.self_path())
-    , _self_path("/" + event.make_hash() + _parent_path)
-    //, _stack_pos(parent.num_children())
+    , _self_path("/" + make_hash() + _parent_path)
+#endif
     , _parent(&parent)
     , _count(1)
     , _num_recursions(0)
@@ -54,6 +57,24 @@ Node::Node(const Event& event, Node& parent)
     , _count_norec(1)
 {
 }
+
+#ifndef NDEBUG
+std::string Node::make_hash() const {
+    std::string name;
+
+    static std::map<const char*, unsigned> _ptr_hash;
+    if (_ptr_hash.find(_name) == _ptr_hash.end()) {
+        _ptr_hash[_name] = (unsigned)_ptr_hash.size();
+    }
+    unsigned idx = _ptr_hash[_name];
+    name = std::to_string(idx);
+    //name = std::string(_name);
+    return name + "."
+        + std::to_string((int)_stack_level) + "."
+        + std::to_string((int)_frame_flag) + "."
+        + std::to_string((int)_measure_process_time);
+}
+#endif
 
 Node& Node::add_child(const Event& event)
 {
@@ -85,8 +106,10 @@ void Node::merge_self(Node&& node, bool strict)
     _num_recursions = std::max(_num_recursions, node.num_recursions());
 
     if(strict) {
+#ifndef NDEBUG
         assert(_parent_path == node.parent_path());
         assert(_self_path == node.self_path());
+#endif
     }
     rebase_children(this, node);
     _children.splice(_children.end(), std::move(node._children));
@@ -135,10 +158,10 @@ Node* Node::deep_copy(Node* parent) const
 
     node->_realtime_used = _realtime_used;
     node->_cpu_used = _cpu_used;
+#ifndef NDEBUG
     node->_parent_path = _parent_path;
     node->_self_path = _self_path;
-    //node->_stack_pos = _stack_pos;
-
+#endif
     node->_parent = parent;
     node->_count = _count;
     node->_num_recursions = _num_recursions;

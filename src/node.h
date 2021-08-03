@@ -34,8 +34,10 @@ public:
     
     uint64_t realtime_used() const { return _realtime_used; }
     uint64_t cpu_used() const { return _cpu_used; }
+#ifndef NDEBUG
     const std::string& parent_path() const { return _parent_path; }
     const std::string& self_path() const { return _self_path; }
+#endif
     const Node *parent() const { return _parent; }
     unsigned count() const { return _count; }
     unsigned num_recursions() const { return _num_recursions; }
@@ -62,6 +64,9 @@ protected:
     void update_stack_level();
 
 private:
+#ifndef NDEBUG
+    std::string Node::make_hash() const;
+#endif
     unsigned mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec);
 
     const char* _name;
@@ -71,9 +76,10 @@ private:
 
     uint64_t _realtime_used;
     uint64_t _cpu_used;
+#ifndef NDEBUG
     std::string _parent_path;
     std::string _self_path;
-    //unsigned _stack_pos;
+#endif
 
     Node *_parent;
     unsigned _count;

@@ -42,25 +42,6 @@ public:
 
     char* desirialize(char* s); // ~= strtok, returns NULL on failure
 
-//protected:
-public:
-    std::string make_hash() const {
-        std::string name;
-#ifdef NDEBUG
-        static std::map<const char*, unsigned> _ptr_hash;
-        if (_ptr_hash.find(_name) == _ptr_hash.end()) {
-            _ptr_hash[_name] = (unsigned)_ptr_hash.size();
-        }
-        unsigned idx = _ptr_hash[_name];
-        name = std::to_string(idx);
-#else
-        name = std::string(_name);
-#endif
-        return name + "."
-            + std::to_string((int)_stack_level) + "."
-            + std::to_string((int)_frame_flag) + "."
-            + std::to_string((int)_measure_process_time);
-    }
 protected:
     const char* _name;
     int _stack_level;
