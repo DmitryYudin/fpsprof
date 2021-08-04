@@ -26,7 +26,7 @@ static void check_recursion(const Node& node)
     }
 }
 
-Stat::Stat(const Node& node)
+Stat::Stat(const Node& node, const std::string& path)
     : _name(node.name())
     , _stack_level_min(node.stack_level())
     , _measure_process_time(node.measure_process_time())
@@ -36,10 +36,11 @@ Stat::Stat(const Node& node)
     , _num_recursions(node.num_recursions())
     , _children_realtime_used(node.children_realtime_used())
 {
+    _paths.push_back(path);
     check_recursion(node);
 }
 
-void Stat::add_node(const Node& node)
+void Stat::add_node(const Node& node, const std::string& path)
 {
     check_recursion(node);
 
@@ -52,24 +53,29 @@ void Stat::add_node(const Node& node)
     _count += node.count();
     _num_recursions += node.num_recursions();
     _children_realtime_used += node.children_realtime_used();
+    _paths.push_back(path);
 }
 
-static void collect_statistics(std::list<Stat*>& stats, const Node& node)
+static void collect_statistics(std::list<Stat*>& stats, const Node& node, const std::string& path = "")
 {
     bool found = false;
     for(auto stat: stats) {
         if(stat->name() == node.name()) {
-            stat->add_node(node);
+            stat->add_node(node, path);
             found = true;
             break;
         }
     }
     if(!found) {
-        stats.push_back(new Stat(node));
+        stats.push_back(new Stat(node, path));
     }
 
     for(auto& child: node.children()) {
-        collect_statistics(stats, child);
+        std::string pathNext;
+        if(node.stack_level() >= 0) {
+            pathNext = std::string(node.name()) + (path.empty() ? "" : "::") + path;
+        }
+        collect_statistics(stats, child, pathNext);
     }
 }
 
@@ -79,6 +85,13 @@ std::list<Stat*> Stat::CollectStatistics(const Node& node)
     
     collect_statistics(stats, node);
 
+    for(auto stat: stats) {
+        stat->_paths.unique();
+        stat->_paths.sort( [](const std::string& a, const std::string& b) {
+            return a < b;
+        });
+    }
+
     stats.sort( [](const Stat* a, const Stat* b) {
         int64_t a_incl = a->realtime_used();
         int64_t b_incl = b->realtime_used();
@@ -86,8 +99,9 @@ std::list<Stat*> Stat::CollectStatistics(const Node& node)
         int64_t b_self = b_incl - b->children_realtime_used();
         return  a_self != b_self ? a_self > b_self : a_incl < b_incl; 
     });
+    // if there is a 'root' node we place it at the end of list
     auto it = std::find_if(stats.begin(), stats.end(), [](const Stat* stat) { 
-            return stat->stack_level_min() == -1;
+        return stat->stack_level_min() == -1;
     });
     if(it != stats.end()) {
         Stat *root = *it;

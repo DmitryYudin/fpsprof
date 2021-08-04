@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <list>
+#include <string>
 
 namespace fpsprof {
 
@@ -16,7 +17,7 @@ class Stat {
 public:
     static std::list<Stat*> CollectStatistics(const Node& node);
 
-    Stat(const Node& node);
+    Stat(const Node& node, const std::string& path);
 
 #if _MSC_VER // Microsofts STL library can't move list< Stat > using only rvalue reference, i.e. there is no 'operator= (std::list<T&&> &&)' available
     Stat(const Stat&) = default;
@@ -38,7 +39,9 @@ public:
 
     uint64_t children_realtime_used() const { return _children_realtime_used; }
 
-    void add_node(const Node& node);
+    const std::list<std::string>& paths() const { return _paths; }
+
+    void add_node(const Node& node, const std::string& path);
 
 private:
     const char* _name;
@@ -51,6 +54,8 @@ private:
     unsigned _num_recursions;
 
     uint64_t _children_realtime_used;
+
+    std::list<std::string> _paths;
 };
 
 }

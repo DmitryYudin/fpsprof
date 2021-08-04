@@ -103,13 +103,15 @@ std::string Printer::formatData(
     return res;
 }
 
+#if PRINT_CPU_USAGE
+    #define DATA_WIDTH (39+7)
+#else
+    #define DATA_WIDTH 39
+#endif
+
 void Printer::printHdr(std::ostream& os, const std::string& name, const char *firstColumnName)
 {
-    unsigned width = 39;
-#if PRINT_CPU_USAGE
-    width += 7;
-#endif
-    const std::string delim = std::string(Printer::_nameColumnWidth + width, '-');
+    const std::string delim = std::string(Printer::_nameColumnWidth + DATA_WIDTH, '-');
     os << delim << std::endl;
     os << name << std::endl;
     os << delim << std::endl;
@@ -135,8 +137,25 @@ void Printer::printStat(std::ostream& os, const Stat& stat, unsigned idx)
 {
     os  << std::setw(3) << idx << " " 
         << formatData(stat.name(), 0, stat.num_recursions(), 
-                stat.realtime_used(), stat.children_realtime_used(), stat.count(), stat.cpu_used())
-        << std::endl;
+                stat.realtime_used(), stat.children_realtime_used(), stat.count(), stat.cpu_used());
+
+    bool print_tree = false;
+    if(!print_tree) {
+        os << std::endl;
+    } else {
+        const auto& paths = stat.paths();
+        if(paths.empty()) {
+            os << std::endl;
+        } else {
+            const std::string delim = std::string(Printer::_nameColumnWidth + DATA_WIDTH, ' ');
+            for(const auto& path: paths) {
+                if(path != paths.front()) {
+                    os << delim;
+                }
+                os << " " << path << std::endl;
+            }
+        }
+    }    
 }
 void Printer::printTree(std::ostream& os, const Node& node)
 {
