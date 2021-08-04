@@ -35,6 +35,7 @@ Stat::Stat(const Node& node, const std::string& path)
     , _count(node.count())
     , _num_recursions(node.num_recursions())
     , _children_realtime_used(node.children_realtime_used())
+    , _child_free(node.children().empty())
 {
     _paths.push_back(path);
     check_recursion(node);
@@ -53,6 +54,7 @@ void Stat::add_node(const Node& node, const std::string& path)
     _count += node.count();
     _num_recursions += node.num_recursions();
     _children_realtime_used += node.children_realtime_used();
+    _child_free &= node.children().empty();
     _paths.push_back(path);
 }
 

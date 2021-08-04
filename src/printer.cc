@@ -104,9 +104,9 @@ std::string Printer::formatData(
 }
 
 #if PRINT_CPU_USAGE
-    #define DATA_WIDTH (39+7)
+    #define DATA_WIDTH (41+7)
 #else
-    #define DATA_WIDTH 39
+    #define DATA_WIDTH 41
 #endif
 
 void Printer::printHdr(std::ostream& os, const std::string& name, const char *firstColumnName)
@@ -117,7 +117,7 @@ void Printer::printHdr(std::ostream& os, const std::string& name, const char *fi
     os << delim << std::endl;
 
     char s[2048];
-    sprintf(s, "%3s %-*s %6s %6s %10s %9s\n", firstColumnName, Printer::_nameColumnWidth, "name",
+    sprintf(s, "%3s %1s %-*s %6s %6s %10s %9s\n", firstColumnName, "L", Printer::_nameColumnWidth, "name",
         "inc%", "exc%", "fps", "call/fr");
 #if PRINT_CPU_USAGE
     sprintf(s + strlen() - 1, " %6s\n", "cpu%");
@@ -128,14 +128,16 @@ void Printer::printTreeHdr(std::ostream& os, const std::string& name) { Printer:
 void Printer::printStatHdr(std::ostream& os, const std::string& name) { Printer::printHdr(os, name, "idx"); }
 void Printer::printNode(std::ostream& os, const Node& node)
 {
-    os  << std::setw(3) << node.stack_level() << " " 
+    os  << std::setw(3) << node.stack_level() << " "
+        << (node.children().empty() ? "*" : " ") << " "
         << formatData(node.name(), node.stack_level(), node.num_recursions(), 
                 node.realtime_used(), node.children_realtime_used(), node.count(), node.cpu_used())
         << std::endl;
 }
 void Printer::printStat(std::ostream& os, const Stat& stat, unsigned idx)
 {
-    os  << std::setw(3) << idx << " " 
+    os  << std::setw(3) << idx << " "
+        << (stat.child_free() ? "*" : " ") << " "
         << formatData(stat.name(), 0, stat.num_recursions(), 
                 stat.realtime_used(), stat.children_realtime_used(), stat.count(), stat.cpu_used());
 

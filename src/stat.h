@@ -38,6 +38,7 @@ public:
     unsigned num_recursions() const { return _num_recursions; }
 
     uint64_t children_realtime_used() const { return _children_realtime_used; }
+    bool child_free() const { return _child_free; }
 
     const std::list<std::string>& paths() const { return _paths; }
 
@@ -54,6 +55,7 @@ private:
     unsigned _num_recursions;
 
     uint64_t _children_realtime_used;
+    bool _child_free;
 
     std::list<std::string> _paths;
 };
