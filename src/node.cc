@@ -37,6 +37,7 @@ Node::Node()
     , _has_penalty(true)
     , _count_norec_removed(0)
     , _count_norec(0)
+    , _count_rec(0)
 {
 }
 Node::Node(const Event& event, Node& parent)
@@ -56,6 +57,7 @@ Node::Node(const Event& event, Node& parent)
     , _has_penalty(true)
     , _count_norec_removed(0)
     , _count_norec(1)
+    , _count_rec(0)
 {
 }
 
@@ -117,6 +119,7 @@ void Node::merge_self(Node&& node, bool strict)
 
     _count_norec_removed += node._count_norec_removed;
     _count_norec += node._count_norec;
+    _count_rec += node._count_rec;
 }
 
 void Node::merge_children(bool strict)
@@ -169,6 +172,8 @@ Node* Node::deep_copy(Node* parent) const
     node->_has_penalty = _has_penalty;
     node->_count_norec_removed = _count_norec_removed;
     node->_count_norec = _count_norec;
+    node->_count_rec = _count_rec;
+
     /*
     std::list<Node> newChildren;
     for(auto& child: _children) {
@@ -250,6 +255,7 @@ bool Node::collapse_recursion()
         parent = parent->_parent;
     }
     parent_recur->_count += _count;
+    parent_recur->_count_rec += _count_rec + _count_norec;
     parent_recur->_num_recursions += _num_recursions + 1;
 
     return true;
@@ -320,7 +326,7 @@ unsigned Node::mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty
     for(auto& child: _children) {
         numChildrenFull += child.mitigate_counter_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec, decrement_tail_nsec);
     }
-    uint64_t decrement_realtime_used = penalty_children_nsec*(numChildrenFull + _count_norec_removed)/penalty_denom + penalty_self_nsec*(_count)/penalty_denom;
+    uint64_t decrement_realtime_used = penalty_children_nsec*(numChildrenFull + _count_norec_removed)/penalty_denom + penalty_self_nsec*(_count - _count_rec)/penalty_denom;
     decrement_realtime_used += decrement_tail_nsec;
 
     uint64_t children_realtime_used_ = children_realtime_used();

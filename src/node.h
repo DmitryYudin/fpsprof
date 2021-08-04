@@ -90,6 +90,7 @@ private:
 
     unsigned _count_norec_removed;
     unsigned _count_norec;
+    unsigned _count_rec;
 };
 
 }
