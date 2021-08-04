@@ -22,29 +22,20 @@ public:
     ThreadMgr() {
         timer::wallclock_t start_wc = timer::wallclock::timestamp();
         unsigned n = 10*1000;
-        uint64_t sum_wc = 0;
+        uint64_t sum_nsec = 0;
         for(unsigned i = 0; i < n; i++) {
-            sum_wc -= timer::wallclock::timestamp();
-            timer::thread::now();
-            sum_wc += timer::wallclock::timestamp();
-            timer::thread::now();
+            ProfPoint pp("dummy", 0, false, false);
+            pp.Start(0);
+            pp.Stop(0);
+            sum_nsec += pp.realtime_stop() - pp.realtime_start();
         }
         timer::wallclock_t stop_wc = timer::wallclock::timestamp();
-
-        int64_t self_nsec = timer::wallclock::diff(sum_wc, 0);
+        int64_t self_nsec = sum_nsec;
         int64_t children_nsec = timer::wallclock::diff(stop_wc, start_wc);
 #ifndef NDEBUG
         fprintf(stderr, "wallclock penalty per %d marks: self %.8f sec (%.0f nsec), children %.8f sec (%.0f nsec)\n",
                 n, self_nsec*1e-9, (double)self_nsec, children_nsec*1e-9, (double)children_nsec);
 #endif
-        // children 0.01087290 sec (10872900 nsec) per 10000 marks,
-        // self     0.00542990 sec ( 5429900 nsec)
-
-        // children 0.01043500 sec (10435000 nsec) per 10000 marks
-        // self     0.00521110 sec ( 5211100 nsec)
-
-        // children 0.10455560 sec (104555600 nsec) per 100000 marks,
-        // self     0.05223850 sec ( 52238500 nsec)
         _penalty_denom = n;
         _penalty_self_nsec = self_nsec;
         _penalty_children_nsec = children_nsec;

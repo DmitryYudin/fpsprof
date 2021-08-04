@@ -21,13 +21,13 @@ struct ProfPoint {
         assert(_state == CREATED);
         _state = STARTED;
         _start_wc = timer::wallclock::timestamp() - penalty_wc;
-        _start_cpu = _measure_process_time ? timer::process::now() : timer::thread::now();
+        _start_cpu = 0; //_measure_process_time ? timer::process::now() : timer::thread::now();
     }
     void Stop(timer::wallclock_t penalty_wc) {
         assert(_state == STARTED);
         _state = COMPLETE;
         _stop_wc = timer::wallclock::timestamp() - penalty_wc;
-        _stop_cpu = _measure_process_time ? timer::process::now() : timer::thread::now();
+        _stop_cpu = 0; //_measure_process_time ? timer::process::now() : timer::thread::now();
     }
     const char* name() const {
         return _name;
