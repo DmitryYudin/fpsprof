@@ -88,7 +88,7 @@ private:
 
     bool _has_penalty;
 
-    unsigned _num_removed;
+    unsigned _count_norec_removed;
     unsigned _count_norec;
 };
 
