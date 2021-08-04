@@ -67,7 +67,7 @@ private:
 #ifndef NDEBUG
     std::string Node::make_hash() const;
 #endif
-    unsigned mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec);
+    unsigned mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec, uint64_t& decrement_tail_nsec);
 
     const char* _name;
     int _stack_level;

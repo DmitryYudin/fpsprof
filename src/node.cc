@@ -314,23 +314,26 @@ unsigned Node::stack_level_max() const
     return n;
 }
 
-unsigned Node::mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec)
+unsigned Node::mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec, uint64_t& decrement_tail_nsec)
 {
     unsigned numChildrenFull = 0;
     for(auto& child: _children) {
-        numChildrenFull += child.mitigate_counter_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
+        numChildrenFull += child.mitigate_counter_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec, decrement_tail_nsec);
     }
     uint64_t decrement_realtime_used = penalty_children_nsec*(numChildrenFull + _num_removed)/penalty_denom + penalty_self_nsec*(_count)/penalty_denom;
+    decrement_realtime_used += decrement_tail_nsec;
 
+    uint64_t children_realtime_used_ = children_realtime_used();
     if(_parent == NULL) { // root
-        _realtime_used = children_realtime_used();
+        _realtime_used = children_realtime_used_;
     } else {
+        uint64_t realtime_used_orig = _realtime_used;
         _realtime_used = _realtime_used < decrement_realtime_used ? 0 : _realtime_used - decrement_realtime_used;
-
-        uint64_t children_realtime_used_ = children_realtime_used();
         if(_realtime_used < children_realtime_used_) {
             _realtime_used = children_realtime_used_;
         }
+        uint64_t decrement_actual = realtime_used_orig - _realtime_used;
+        decrement_tail_nsec = decrement_realtime_used - decrement_actual;
     }
     _has_penalty = false;
 
@@ -338,6 +341,7 @@ unsigned Node::mitigate_counter_penalty(unsigned penalty_denom, uint64_t penalty
 }
 void Node::MitigateCounterPenalty(Node& root, unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec)
 {
-    root.mitigate_counter_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
+    uint64_t decrement_tail_nsec = 0;
+    root.mitigate_counter_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec, decrement_tail_nsec);
 }
 }

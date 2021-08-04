@@ -33,10 +33,10 @@ protected:
 
 private:
     static std::string formatData(const char *name, int stack_level, unsigned num_recursions,
-        uint64_t realtime_used,
-        uint64_t children_realtime_used,
+        int64_t realtime_used,
+        int64_t children_realtime_used,
         unsigned count,
-        uint64_t cpu_used
+        int64_t cpu_used
     );
     static std::string formatName(const char *name, unsigned stack_level, unsigned num_recursions);
 
