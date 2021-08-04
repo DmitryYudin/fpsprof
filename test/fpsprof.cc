@@ -18,22 +18,19 @@ static void usage(void)
 "\n"
 "Options:\n"
 "  -h, --help     Print this help.\n"
-"  -r, --report   Report type:\n"
-"                   1 - Report per thread FPS only.\n"
-"                   2 - Show stack-top events only.\n"
-"                   4 - Summary. Show all stack events, but group frame items appeared\n"
-"                       multiple times on the same stack position (loop labels).\n"
-"                       Also merge simple recursions a->a => a.\n"
-"                   8 - Summary. Same as previous, but w/o recursion merge.\n"
-"                  16 - Detailed report. Only group events sharing same stack\n"
-"                       position between different frames.\n"
-"                 Bitwise 'or' is allowed to generate several reports.\n"
-"                 (default: 31)\n"
-"  -s, --stack    Max stack level to report. (default: -1)\n"
 "\n"
     );
 }
 
+static bool check_file_exist(const char *filename)
+{
+    FILE *fp = fopen(filename, "r");
+    if(fp) {
+        fclose(fp);
+    }
+    return fp != NULL;
+
+}
 #ifdef NDEBUG
 #define TRACE_ERR(cond, fmt, ...) if (cond) { fprintf(stderr, "error:" fmt "\n", ##__VA_ARGS__); return 1; }
 #else
@@ -49,11 +46,11 @@ int main(int argc, char *argv[])
     static const struct option long_options[] = {
         { "help",   no_argument,        0, 'h' },
         { "input",  required_argument,  0, 'i' },
-        { "report", required_argument,  0, 'r' },
-        { "stack",  required_argument,  0, 's' },
+        //{ "report", required_argument,  0, 'r' },
+        //{ "stack",  required_argument,  0, 's' },
     };
     const char* filename = NULL;
-    int ch, reportFlags = 0xff, stackLevelMax = -1;
+    int ch;
     while ((ch = getopt_long(argc, argv, "hi:r:s:", long_options, 0)) != EOF) {
         switch (ch) {
         case 'h':
@@ -61,16 +58,16 @@ int main(int argc, char *argv[])
         case 'i':
             filename = optarg;
             break;
-        case 'r':
-            if (sscanf(optarg, "%u", &reportFlags) != 1) {
-                TRACE_ERR(1, "invalid argument for '-r' option: %s", optarg)
-            }
-            break;
-        case 's':
-            if (sscanf(optarg, "%u", &stackLevelMax) != 1) {
-                TRACE_ERR(1, "invalid argument for '-s' option: %s", optarg)
-            }
-            break;
+        //case 'r':
+        //    if (sscanf(optarg, "%u", &reportFlags) != 1) {
+        //        TRACE_ERR(1, "invalid argument for '-r' option: %s", optarg)
+        //    }
+        //    break;
+        //case 's':
+        //    if (sscanf(optarg, "%u", &stackLevelMax) != 1) {
+        //        TRACE_ERR(1, "invalid argument for '-s' option: %s", optarg)
+        //    }
+        //    break;
 
         default:
             usage();
@@ -85,12 +82,14 @@ int main(int argc, char *argv[])
     }
 
     TRACE_ERR(filename == NULL, "input file name required")
+    TRACE_ERR(!check_file_exist(filename), "input file does not exist")
 
     fpsprof::Reporter reporter;
-    TRACE_ERR(!reporter.Deserialize(filename), "failed to parse proliler log: %s", filename)
+    TRACE_ERR(!reporter.Deserialize(filename), "failed to parse profiler log: %s", filename)
 
-    std::string report = reporter.Report(reportFlags, stackLevelMax);
+    std::string report = reporter.Report();
     printf("%s\n", report.c_str());
+
 
     return 0;
 }

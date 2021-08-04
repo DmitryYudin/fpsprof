@@ -17,16 +17,16 @@ struct ProfPoint {
         : _state(CREATED), _name(name), _stack_level(stack_level)
         , _frame_flag(frame_flag), _measure_process_time(measure_process_time) {
     }
-    void Start() {
+    void Start(timer::wallclock_t penalty_wc) {
         assert(_state == CREATED);
         _state = STARTED;
-        _start_wc = timer::wallclock::timestamp();
+        _start_wc = timer::wallclock::timestamp() - penalty_wc;
         _start_cpu = _measure_process_time ? timer::process::now() : timer::thread::now();
     }
-    void Stop() {
+    void Stop(timer::wallclock_t penalty_wc) {
         assert(_state == STARTED);
         _state = COMPLETE;
-        _stop_wc = timer::wallclock::timestamp();
+        _stop_wc = timer::wallclock::timestamp() - penalty_wc;
         _stop_cpu = _measure_process_time ? timer::process::now() : timer::thread::now();
     }
     const char* name() const {

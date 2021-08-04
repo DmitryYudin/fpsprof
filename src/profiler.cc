@@ -19,6 +19,37 @@ namespace fpsprof {
 
 class ThreadMgr {
 public:
+    ThreadMgr() {
+        timer::wallclock_t start_wc = timer::wallclock::timestamp();
+        unsigned n = 10*1000;
+        uint64_t sum_wc = 0;
+        for(unsigned i = 0; i < n; i++) {
+            sum_wc -= timer::wallclock::timestamp();
+            timer::thread::now();
+            sum_wc += timer::wallclock::timestamp();
+            timer::thread::now();
+        }
+        timer::wallclock_t stop_wc = timer::wallclock::timestamp();
+
+        int64_t self_nsec = timer::wallclock::diff(sum_wc, 0);
+        int64_t children_nsec = timer::wallclock::diff(stop_wc, start_wc);
+#ifndef NDEBUG
+        fprintf(stderr, "wallclock penalty per %d marks: self %.8f sec (%.0f nsec), children %.8f sec (%.0f nsec)\n",
+                n, self_nsec*1e-9, (double)self_nsec, children_nsec*1e-9, (double)children_nsec);
+#endif
+        // children 0.01087290 sec (10872900 nsec) per 10000 marks,
+        // self     0.00542990 sec ( 5429900 nsec)
+
+        // children 0.01043500 sec (10435000 nsec) per 10000 marks
+        // self     0.00521110 sec ( 5211100 nsec)
+
+        // children 0.10455560 sec (104555600 nsec) per 100000 marks,
+        // self     0.05223850 sec ( 52238500 nsec)
+        _penalty_denom = n;
+        _penalty_self_nsec = self_nsec;
+        _penalty_children_nsec = children_nsec;
+    }
+
     ~ThreadMgr() {
         if (!_serialize_filename.empty()) {
             std::ofstream ofs(_serialize_filename, std::ios::out | std::ios::binary | std::ios::trunc);
@@ -29,7 +60,6 @@ public:
         }
         FILE *fp = !_report_filename.empty() ? fopen(_report_filename.c_str(), "wb") : _report;
         if (fp) {
-            int reportFlags = -1 ^ REPORT_DETAILED;
 /*           
             Disable detailed report print out since children go to first parent by the design
             and this produce unexpected call stack view. The summary report fixes this issue.
@@ -46,12 +76,18 @@ public:
              -> LoopFilterLcu            -> 16.5   0.3      125.2    29992.2  239.63   94.5
 
 */
-            fprintf(fp, "%s\n", _reporter.Report(reportFlags).c_str());
+            fprintf(fp, "%s\n", _reporter.Report().c_str());
             if (!_report_filename.empty()) {
                 fclose(fp);
             }
         }
     }
+    void get_penalty(unsigned& penalty_denom, uint64_t& penalty_self_nsec, uint64_t& penalty_children_nsec) {
+        penalty_denom = _penalty_denom;
+        penalty_self_nsec = _penalty_self_nsec;
+        penalty_children_nsec = _penalty_children_nsec;
+    }
+
     void set_serialize_stream(FILE* stream) {
         _serialize = stream;
     }
@@ -65,7 +101,7 @@ public:
         _report_filename = filename ? filename : "";
     }
     void onThreadProfExit(std::list<ProfPoint>&& marks) {
-        _reporter.AddProfPoints(std::move(marks));
+        _reporter.AddRawThread(std::move(marks));
     }
 private:
     FILE* _serialize = NULL;
@@ -74,44 +110,48 @@ private:
     std::string _report_filename;
 
     Reporter _reporter;
+
+    unsigned _penalty_denom;
+    int64_t _penalty_children_nsec;
+    int64_t _penalty_self_nsec;
 };
 
 struct ThreadProf {
     explicit ThreadProf(ThreadMgr& threadMgr) : _threadMgr(threadMgr) {
     }
     ~ThreadProf() {
-        if (_marks.size() == 0) {
+        if (_storage.size() == 0) {
             return;
         }
-        std::list<ProfPoint> marks;
+        std::list<ProfPoint> storage;
 #if !USE_FASTWRITE_STORAGE
-        marks = std::move(_marks);
+        storage = std::move(_storage);
 #else
-        marks = _marks.to_list();
+        storage = _storage.to_list();
 #endif
-        _threadMgr.onThreadProfExit(std::move(marks));
+        _threadMgr.onThreadProfExit(std::move(storage));
     }
 
     ProfPoint* push(const char* name, bool frame_flag) {
         bool measure_process_time = false;
 #if !USE_FASTWRITE_STORAGE
-        _marks.emplace_back(name, _stack_level++, frame_flag, measure_process_time);
-        ProfPoint* pp = &_marks.back(); // safe for a list<>
+        _storage.emplace_back(name, _stack_level++, frame_flag, measure_process_time);
+        ProfPoint* pp = &_storage.back(); // safe for a list<>
 #else
         if (_stack_level == 0) {
-            unsigned events_count = _marks.size();
+            unsigned events_count = _storage.size();
             unsigned events_num = events_count - _events_count_prev;
             _events_num_max = std::max(_events_num_max, events_num);
             _events_count_prev = events_count;
-            _marks.reserve(3 * _events_num_max);
+            _storage.reserve(3 * _events_num_max);
         }
-        ProfPoint* pp = _marks.alloc_item();
+        ProfPoint* pp = _storage.alloc_item();
         *pp = ProfPoint(name, _stack_level++, frame_flag, measure_process_time);
 #endif
 #ifndef NDEBUG
         _pp_last_in = pp;
 #endif
-        pp->Start();
+        pp->Start(_storage.get_overhead_wc());
         return pp;
     }
     void pop(ProfPoint* pp) {
@@ -120,7 +160,7 @@ struct ThreadProf {
         if (pp->stack_level() != _stack_level) {
             panic_and_exit(pp);
         }
-        pp->Stop();
+        pp->Stop(_storage.get_overhead_wc());
 #ifndef NDEBUG
         _pp_last_out = pp;
 #endif
@@ -129,13 +169,13 @@ private:
     void panic_and_exit(ProfPoint* pp) {
         const char* exit_name = pp->name();
         unsigned exit_level = pp->stack_level();
-        std::list<ProfPoint> marks;
+        std::list<ProfPoint> storage;
 #if !USE_FASTWRITE_STORAGE
-        marks = std::move(_marks);
+        storage = std::move(_storage);
 #else
-        marks = _marks.to_list();
+        storage = _storage.to_list();
 #endif
-        for (const auto& mark : marks) {
+        for (const auto& mark : storage) {
             if (mark.complete()) {
                 continue;
             }
@@ -153,9 +193,9 @@ private:
     }
     ThreadMgr& _threadMgr;
 #if !USE_FASTWRITE_STORAGE
-    std::list<ProfPoint> _marks;
+    std::list<ProfPoint> _storage;
 #else
-    fastwrite_storage_t<ProfPoint> _marks;
+    fastwrite_storage_t<ProfPoint> _storage;
 #endif
 
     int _stack_level = 0;
@@ -172,6 +212,10 @@ timer::wallclock_t ProfPoint::_init_wc = timer::wallclock::timestamp();
 static ThreadMgr gThreadMgr;
 static thread_local ThreadProf gThreadProf(gThreadMgr);
 
+extern void GetPenalty(unsigned& penalty_denom, uint64_t& penalty_self_nsec, uint64_t& penalty_children_nsec)
+{
+    gThreadMgr.get_penalty(penalty_denom, penalty_self_nsec, penalty_children_nsec);
+}
 }
 
 extern "C" void FPSPROF_serialize_stream(FILE* fp)
