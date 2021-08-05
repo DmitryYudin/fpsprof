@@ -21,27 +21,39 @@ template <class item_t>
 class fastwrite_storage_t {
 public:
     fastwrite_storage_t() {
-        _pages.push_back(current_page);
+        _pages.push_back(_current_page);
     }
     ~fastwrite_storage_t() {
         for (auto& page : _pages) {
             page_free(page);
         }
     }
+    void clear() {
+        _reading = false;
+        _next_idx = 0;
+        for (auto& page : _pages) {
+            page_free(page);
+        }
+        _next_page = _pages.end();
+
+        _current_page = page_alloc();
+        _pages.push_back(_current_page);
+        _alloc_overhead_wc = 0;
+    }
 
     timer::wallclock_t get_overhead_wc() const { return _alloc_overhead_wc; }
 
     item_t* alloc_item() {
         assert(!_reading);
-        item_t* item = &current_page[_next_idx & page_mask];
+        item_t* item = &_current_page[_next_idx & page_mask];
         _next_idx++;
         if (0 == (_next_idx & page_mask)) {
             if (_next_page != _pages.end()) {
-                current_page = *_next_page++;
+                _current_page = *_next_page++;
             } else {
                 uint64_t wc = timer::wallclock::timestamp();
-                current_page = page_alloc(); // caller is responsible to manage reserve()
-                _pages.push_back(current_page);
+                _current_page = page_alloc(); // caller is responsible to manage reserve()
+                _pages.push_back(_current_page);
                 _alloc_overhead_wc += timer::wallclock::timestamp() - wc;
             }
         }
@@ -119,9 +131,9 @@ private:
 
     bool _reading = false;
     unsigned _next_idx = 0;
-    item_t* current_page = page_alloc();
     std::list<item_t*> _pages;
     typename std::list<item_t*>::iterator _next_page = _pages.end();
+    item_t* _current_page = page_alloc();
     timer::wallclock_t _alloc_overhead_wc = 0;
 };
 }

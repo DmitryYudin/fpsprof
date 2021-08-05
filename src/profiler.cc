@@ -20,25 +20,6 @@ namespace fpsprof {
 class ThreadMgr {
 public:
     ThreadMgr() {
-        timer::wallclock_t start_wc = timer::wallclock::timestamp();
-        unsigned n = 10*1000;
-        uint64_t sum_nsec = 0;
-        for(unsigned i = 0; i < n; i++) {
-            ProfPoint pp("dummy", 0, false, false);
-            pp.Start(0);
-            pp.Stop(0);
-            sum_nsec += pp.realtime_stop() - pp.realtime_start();
-        }
-        timer::wallclock_t stop_wc = timer::wallclock::timestamp();
-        int64_t self_nsec = sum_nsec;
-        int64_t children_nsec = timer::wallclock::diff(stop_wc, start_wc);
-#ifndef NDEBUG
-        fprintf(stderr, "wallclock penalty per %d marks: self %.8f sec (%.0f nsec), children %.8f sec (%.0f nsec)\n",
-                n, self_nsec*1e-9, (double)self_nsec, children_nsec*1e-9, (double)children_nsec);
-#endif
-        _penalty_denom = n;
-        _penalty_self_nsec = self_nsec;
-        _penalty_children_nsec = children_nsec;
     }
 
     ~ThreadMgr() {
@@ -51,22 +32,6 @@ public:
         }
         FILE *fp = !_report_filename.empty() ? fopen(_report_filename.c_str(), "wb") : _report;
         if (fp) {
-/*           
-            Disable detailed report print out since children go to first parent by the design
-            and this produce unexpected call stack view. The summary report fixes this issue.
-
-            LoopFilterLcu(fake)
-            ...
-            LoopFilterLcu(do_job)
-            V
-             -- LoopFilterLcu            --  0.0   0.0   121172.8    30278.3    0.25   98.6
-            |     DeblockingFilterLCU   |    2.4   2.4      842.4   202101.9  239.88  104.2
-            |     SaoLcu                |   13.5   7.6      152.6    36596.5  239.88   93.2
-            |       ProcessSao          |    3.4   0.6      615.1   147557.9  239.88   91.6
-            |   EncodeLCU               |    0.0   0.0   219132.1    54755.5    0.25    0.0
-             -> LoopFilterLcu            -> 16.5   0.3      125.2    29992.2  239.63   94.5
-
-*/
             fprintf(fp, "%s\n", _reporter.Report().c_str());
             if (!_report_filename.empty()) {
                 fclose(fp);
@@ -92,7 +57,16 @@ public:
         _report_filename = filename ? filename : "";
     }
     void onThreadProfExit(std::list<ProfPoint>&& marks) {
+        // TODO: critical section
         _reporter.AddRawThread(std::move(marks));
+    }
+
+    // temporary
+    bool have_panalty() const { return _penalty_denom != 0; }
+    void set_panalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec) {
+        _penalty_denom = penalty_denom;
+        _penalty_self_nsec = penalty_self_nsec;
+        _penalty_children_nsec = penalty_children_nsec;
     }
 private:
     FILE* _serialize = NULL;
@@ -102,13 +76,16 @@ private:
 
     Reporter _reporter;
 
-    unsigned _penalty_denom;
-    int64_t _penalty_children_nsec;
-    int64_t _penalty_self_nsec;
+    unsigned _penalty_denom = 0;
+    int64_t _penalty_children_nsec = 0;
+    int64_t _penalty_self_nsec = 0;
 };
 
 struct ThreadProf {
     explicit ThreadProf(ThreadMgr& threadMgr) : _threadMgr(threadMgr) {
+        if(!_threadMgr.have_panalty()) {
+            estimate_penalty();
+        }
     }
     ~ThreadProf() {
         if (_storage.size() == 0) {
@@ -156,6 +133,42 @@ struct ThreadProf {
         _pp_last_out = pp;
 #endif
     }
+
+private:
+    void estimate_penalty() {
+        timer::wallclock_t start_wc = timer::wallclock::timestamp();
+        unsigned n = 10*1000;
+        for(unsigned i = 0; i < n; i++) {
+            void* handle = FPSPROF_start("dummy");
+            FPSPROF_stop(handle);
+            //sum_nsec += pp.realtime_stop() - pp.realtime_start();
+        }
+        timer::wallclock_t stop_wc = timer::wallclock::timestamp();
+
+        std::list<ProfPoint> storage;
+#if !USE_FASTWRITE_STORAGE
+        storage = std::move(_storage);
+#else
+        storage = _storage.to_list();
+        _storage.clear();
+#endif
+        uint64_t sum_nsec = 0;
+        for(const auto& pp: storage) {
+            sum_nsec += pp.realtime_stop() - pp.realtime_start();
+        }
+        int64_t self_nsec = sum_nsec;
+        int64_t children_nsec = timer::wallclock::diff(stop_wc, start_wc);
+//#ifndef NDEBUG
+        fprintf(stderr, "wallclock penalty per %d marks: self %.8f sec (%10.0f nsec), children %.8f sec (%10.0f nsec)\n",
+                n, self_nsec*1e-9, (double)self_nsec, children_nsec*1e-9, (double)children_nsec);
+//#endif
+        _threadMgr.set_panalty(n, self_nsec, children_nsec);
+
+        _stack_level = 0;
+        _events_count_prev = 0;
+        _events_num_max = 0;
+    }
+
 private:
     void panic_and_exit(ProfPoint* pp) {
         const char* exit_name = pp->name();
