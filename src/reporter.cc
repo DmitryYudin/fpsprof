@@ -51,54 +51,43 @@ void Reporter::Serialize(std::ostream& os) const
 
 void generate_reports(
     ThreadMap& threadMap,
-    std::vector< Node* >& threadsFull,
-    std::vector< Node* >& threadsNoRecur,
-    std::vector< std::list< Stat* > >& funcStatsFull,
-    std::vector< std::list< Stat* > >& funcStatsNoRecur
+    std::map< int, Node* >& threadsFull,
+    std::map< int, Node* >& threadsNoRecur,
+    std::map< int, std::list< Stat* > >& funcStatsFull,
+    std::map< int, std::list< Stat* > >& funcStatsNoRecur
 )
 {
+    const std::map<int, Node* >& threads = threadMap.threads();
     unsigned penalty_denom = threadMap.reported_penalty_denom();
     uint64_t penalty_self_nsec = threadMap.reported_penalty_self_nsec();
     uint64_t penalty_children_nsec = threadMap.reported_penalty_children_nsec();
-    
-    for (auto& threadEvents : threadMap) {
-        auto& events = threadEvents.second;
 
-        auto rootFull = Node::CreateFull(std::move(events));
-        auto rootNoRecur = Node::CreateNoRecur(*rootFull);
+    for (auto& thread : threads) {
+        int thread_id = thread.first;
+        const auto rootFull = thread.second;
 
+        auto rootNoRecur = Node::CreateNoRecur(*rootFull); fflush(stderr);
         Node::MitigateCounterPenalty(*rootFull, penalty_denom, penalty_self_nsec, penalty_children_nsec);
-        auto rootNoRecur2 = Node::CreateNoRecur(*rootFull);
 
+        auto rootNoRecur2 = Node::CreateNoRecur(*rootFull);
         Node::MitigateCounterPenalty(*rootNoRecur, penalty_denom, penalty_self_nsec, penalty_children_nsec);
 
-        threadsFull.push_back(rootFull);
-        threadsNoRecur.push_back(rootNoRecur);
-
-        funcStatsFull.push_back(Stat::CollectStatistics(*rootNoRecur2));
-        funcStatsNoRecur.push_back(Stat::CollectStatistics(*rootNoRecur));
-    }
-
-    int mainThreadId = -1;
-    for(size_t threadId = 0; threadId < threadsFull.size(); threadId++) {
-        if (threadsFull[threadId]->frame_flag()) {
-            mainThreadId = (unsigned)threadId;
-            break;
-        }
-    }
-    if (mainThreadId == -1) {
-        throw std::runtime_error("no main thread found");
-    }
-    if (mainThreadId != 0) { // set to mt_id = 0
-        std::swap(threadsFull[0], threadsFull[mainThreadId]);
-        std::swap(threadsNoRecur[0], threadsNoRecur[mainThreadId]);
+        threadsFull[thread_id] = rootFull;
+        threadsNoRecur[thread_id] = rootNoRecur;
+        funcStatsFull[thread_id] = Stat::CollectStatistics(*rootNoRecur2);
+        funcStatsNoRecur[thread_id] = Stat::CollectStatistics(*rootNoRecur);
     }
 }
 
 std::string Reporter::report()
 {
-    std::vector< Node* > threadsFull, threadsNoRecur;
-    std::vector< std::list<Stat*> > funcStatsFull, funcStatsNoRecur;
+    if(_threadMap.threads().empty()) {
+        return "";
+    }
+    fprintf(stderr, "Generating reports\n");
+
+    std::map< int, Node* > threadsFull, threadsNoRecur;
+    std::map< int, std::list<Stat*> > funcStatsFull, funcStatsNoRecur;
     generate_reports(_threadMap, threadsFull, threadsNoRecur, funcStatsFull, funcStatsNoRecur);
 
     //const auto frameThread = threadsFull[0];
@@ -112,7 +101,8 @@ std::string Reporter::report()
     }
     {
         unsigned stackLevelMax = 0, nameLengthMax = 0;
-        for (const auto& node : threadsFull) {
+        for (const auto& thread : threadsFull) {
+            auto *node = thread.second;
             stackLevelMax = std::max(stackLevelMax, node->stack_level_max());
             nameLengthMax = std::max(nameLengthMax, node->name_len_max());
         }
@@ -141,7 +131,6 @@ std::string Reporter::report()
 
 std::string Reporter::Report()
 {
-    fprintf(stderr, "Generating reports\n");
     try {
         return this->report();
     } catch (std::exception& e) {

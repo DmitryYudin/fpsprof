@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <map>
 #include <iostream>
 
 namespace fpsprof {
@@ -20,8 +21,8 @@ class Printer {
 public:
     static void setNameColumnWidth(unsigned nameLen, unsigned stack_level, unsigned num_recursions);
     static void setFrameCounters(uint64_t realtime_used, unsigned count);
-    static void printTrees(std::ostream& os, const char *name, const std::vector< Node* >& threads, bool heads_only = false);
-    static void printStats(std::ostream& os, const char *name, std::vector< std::list< Stat* > >& threads);
+    static void printTrees(std::ostream& os, const char *name, const std::map< int,  Node* >& threads, bool heads_only = false);
+    static void printStats(std::ostream& os, const char *name, const std::map< int, std::list< Stat* > >& threads);
 
 
 protected:

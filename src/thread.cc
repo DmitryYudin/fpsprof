@@ -1,4 +1,5 @@
 #include "thread.h"
+#include "node.h"
 
 #include <inttypes.h>
 
@@ -35,8 +36,8 @@ void ThreadMap::AddRawThread(std::list<ProfPoint>&& marks)
         return;
     }
 
-    int thread_id = (int)this->size();
-    operator[](thread_id) = std::move(events);
+    int thread_id = (int)_threadEventsMap.size();
+    _threadEventsMap[thread_id] = std::move(events);
 }
 
 #define READ_NEXT_TOKEN(s, err_action) s = strtok(NULL, " "); if (!s) { err_action; };
@@ -75,6 +76,15 @@ bool ThreadMap::Deserialize(std::ifstream& ifs)
     int thread_id = 0;
     int64_t thread_time = 0;
     std::map<unsigned, std::string> ids;
+
+    auto onFrameRead = [this] (int thread_id) {
+        auto thread = _threads.find(thread_id);
+        if(thread == _threads.end()) {
+            _threads[thread_id] = new Node();
+        }
+        Node *root = _threads[thread_id];
+        root->AddThreadEvents(std::move(_threadEventsMap[thread_id]));
+    };
 
     char line[2048];
     unsigned count = 0;
@@ -138,7 +148,12 @@ bool ThreadMap::Deserialize(std::ifstream& ifs)
             event._stop_nsec = stop_time*(time_resolution_nsec ? 100 : 1);
             event._measure_process_time = measure_process_time;
             event._cpu_used = 0; //READ_LONGLONG(s, event._cpu_used, goto error_exit)
-            operator[](thread_id).push_back(event);
+
+            if(event.stack_level() == 0) {
+                onFrameRead(thread_id);
+            }
+
+            _threadEventsMap[thread_id].push_back(event);
 
             thread_time += start_time;
         } else {
@@ -146,8 +161,27 @@ bool ThreadMap::Deserialize(std::ifstream& ifs)
         }
     }
 
+    onFrameRead(thread_id);
+
     assert(_penalty_denom);
 
+    {
+        int mainThreadId = -1;
+        for (auto& thread : _threads) {
+            int thread_id = thread.first;
+            const auto node = thread.second;
+            if (node->frame_flag()) {
+                mainThreadId = thread_id;
+                break;
+            }
+        }
+        if (mainThreadId == -1) {
+            throw std::runtime_error("no main thread found");
+        }
+        if (mainThreadId != 0) { // set to mt_id = 0
+            std::swap(_threads[0], _threads[mainThreadId]);
+        }
+    }
     return true;
 
 error_exit:
@@ -173,7 +207,7 @@ void ThreadMap::Serialize(std::ostream& os) const
         << fmt
         << std::endl;
 
-    for (const auto& threadEvents : *this) {
+    for (const auto& threadEvents : _threadEventsMap) {
         const auto& events = threadEvents.second;
         for (const auto& event : events) {
             measure_process_time = event.measure_process_time();
@@ -189,7 +223,7 @@ void ThreadMap::Serialize(std::ostream& os) const
 
     std::map<const char*, unsigned> ids;
     if(fmt == 1) {
-        for (const auto& threadEvents : *this) {
+        for (const auto& threadEvents : _threadEventsMap) {
             const auto& events = threadEvents.second;
             for (const auto& event : events) {
                 if(ids.find(event.name()) == ids.end()) {
@@ -204,7 +238,7 @@ void ThreadMap::Serialize(std::ostream& os) const
         }
     }
 
-    for (const auto& threadEvents : *this) {
+    for (const auto& threadEvents : _threadEventsMap) {
         int thread_id = threadEvents.first;
         const auto& events = threadEvents.second;
         if(events.empty()) {

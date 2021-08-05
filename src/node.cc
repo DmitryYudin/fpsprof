@@ -262,11 +262,14 @@ bool Node::collapse_recursion()
 #endif
 }
 
-Node* Node::CreateFull(std::list<Event>&& events)
+void Node::AddThreadEvents(std::list<Event>&& events)
 {
-    Node *root = new Node();
+    if(events.empty()) {
+        return;
+    }
+
     std::stack<Node*> stack;
-    stack.push(root);
+    stack.push(this);
     while (!events.empty()) {
         auto& event = events.front();
         while (stack.top()->stack_level() >= event.stack_level()) {
@@ -279,18 +282,19 @@ Node* Node::CreateFull(std::list<Event>&& events)
         events.pop_front();
     }
 
-    root->merge_children(true);
-    for(const auto& child: root->children()) {
-        root->_frame_flag |= child.frame_flag();
-        root->_realtime_used += child.realtime_used();
-        root->_cpu_used += child.cpu_used();
-        root->_count += child.count();
+    merge_children(true);
+    _realtime_used = 0;
+    _cpu_used = 0;
+    _count = 0;
+    for(const auto& child: _children) {
+        _frame_flag |= child.frame_flag();
+        _realtime_used += child.realtime_used();
+        _cpu_used += child.cpu_used();
+        _count += child.count();
     }
-    if(root->frame_flag() && root->children().size() > 1) {
+    if(_frame_flag && _children.size() > 1) {
         throw std::runtime_error("frame thread must have only one entry point");
     }
-
-    return root;
 }
 
 Node* Node::CreateNoRecur(const Node& node)

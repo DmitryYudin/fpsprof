@@ -15,7 +15,8 @@ class Event;
 
 class Node {
 public:
-    static Node* CreateFull(std::list<Event>&& events);
+    void AddThreadEvents(std::list<Event>&& events);
+
     static Node* CreateNoRecur(const Node& root);
     static void MitigateCounterPenalty(Node& root, unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec);
 

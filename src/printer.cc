@@ -167,12 +167,13 @@ void Printer::printTree(std::ostream& os, const Node& node)
     }
 }
 
-void Printer::printTrees(std::ostream& os, const char *name, const std::vector< Node* >& threads, bool heads_only)
+void Printer::printTrees(std::ostream& os, const char *name, const std::map< int, Node* >& threads, bool heads_only)
 {
     const std::string header = std::string(name) + " [ " + std::to_string(threads.size()) + " thread(s) ]";
 
     printTreeHdr(os, header);
-    for(const auto node: threads) {
+    for(const auto& thread: threads) {
+        const auto node = thread.second;
         if(heads_only) {
             printNode(os, *node);
         } else {
@@ -182,12 +183,13 @@ void Printer::printTrees(std::ostream& os, const char *name, const std::vector< 
     os << std::endl;
 }
 
-void Printer::printStats(std::ostream& os, const char *name, std::vector< std::list< Stat* > >& threads)
+void Printer::printStats(std::ostream& os, const char *name, const std::map< int, std::list< Stat* > >& threads)
 {
     const std::string header = std::string(name) + " [ " + std::to_string(threads.size()) + " thread(s) ]";
 
     printStatHdr(os, header);
-    for(const auto& stats: threads) {
+    for(const auto& thread: threads) {
+        const auto& stats = thread.second;
         unsigned idx = 1;
         for(const auto stat: stats) {
             printStat(os, *stat, idx++);
