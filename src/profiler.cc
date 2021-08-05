@@ -17,22 +17,22 @@
 #define USE_FASTWRITE_STORAGE 1
 namespace fpsprof {
 
-class IThreadMgr {
+class IProfThreadMgr {
 public:
     // every thread dumps all collected events to attached manager on destroy
-    virtual void onThreadProfExit(std::list<ProfPoint>&& marks) = 0;
+    virtual void onProfThreadExit(std::list<ProfPoint>&& marks) = 0;
 };
 
-struct ThreadProf {
-    explicit ThreadProf(IThreadMgr& threadMgr) : _threadMgr(threadMgr) {}
-    ~ThreadProf();
+struct ProfThread {
+    explicit ProfThread(IProfThreadMgr& threadMgr) : _threadMgr(threadMgr) {}
+    ~ProfThread();
     ProfPoint* push(const char* name, bool frame_flag);
     void pop(ProfPoint* pp);
 
 private:
     void panic_and_exit(ProfPoint* pp);
 
-    IThreadMgr& _threadMgr;
+    IProfThreadMgr& _threadMgr;
 #if !USE_FASTWRITE_STORAGE
     std::list<ProfPoint> _storage;
 #else
@@ -49,7 +49,7 @@ private:
 #endif
 };
 
-ThreadProf::~ThreadProf()
+ProfThread::~ProfThread()
 {
     std::list<ProfPoint> storage;
 #if !USE_FASTWRITE_STORAGE
@@ -57,10 +57,10 @@ ThreadProf::~ThreadProf()
 #else
     storage = _storage.to_list();
 #endif
-    _threadMgr.onThreadProfExit(std::move(storage));
+    _threadMgr.onProfThreadExit(std::move(storage));
 }
 
-ProfPoint* ThreadProf::push(const char* name, bool frame_flag)
+ProfPoint* ProfThread::push(const char* name, bool frame_flag)
 {
     bool measure_process_time = false;
 #if !USE_FASTWRITE_STORAGE
@@ -83,7 +83,7 @@ ProfPoint* ThreadProf::push(const char* name, bool frame_flag)
     pp->Start(_storage.get_overhead_wc());
     return pp;
 }
-void ThreadProf::pop(ProfPoint* pp)
+void ProfThread::pop(ProfPoint* pp)
 {
     _stack_level--;
 
@@ -95,7 +95,7 @@ void ThreadProf::pop(ProfPoint* pp)
     _pp_last_out = pp;
     #endif
 }
-void ThreadProf::panic_and_exit(ProfPoint* pp) {
+void ProfThread::panic_and_exit(ProfPoint* pp) {
     const char* exit_name = pp->name();
     unsigned exit_level = pp->stack_level();
     std::list<ProfPoint> storage;
@@ -121,33 +121,52 @@ void ThreadProf::panic_and_exit(ProfPoint* pp) {
     exit(1);
 }
 
-class ThreadMgr : public IThreadMgr {
+#if __GNUC__ || __clang__
+    #define _noinline __attribute__ ((noinline))
+#else
+    #define _noinline __declspec(noinline)
+#endif
+/*
+    Simulate real profiler call
+*/
+struct DummyProfThreadMgr : public IProfThreadMgr {
 public:
-    struct DummyThreadMgr : public IThreadMgr {
-    public:
-        void onThreadProfExit(std::list<ProfPoint>&& marks) override { storage = std::move(marks); }
-        std::list<ProfPoint> storage;
-    };
+    void onProfThreadExit(std::list<ProfPoint>&& marks) override { storage = std::move(marks); }
+    std::list<ProfPoint> storage;
+};
+static DummyProfThreadMgr gDummyProfThreadMgr;
+static ProfThread *gDummyProfThread = new ProfThread(gDummyProfThreadMgr);
 
-    ThreadMgr() {
+extern "C" _noinline void* FPSPROF_start_dummy(const char* name)
+{
+    return fpsprof::gDummyProfThread->push(name, false);
+}
+extern "C" _noinline void FPSPROF_stop_dummy(void* handle)
+{
+    fpsprof::gDummyProfThread->pop((fpsprof::ProfPoint*)handle);
+}
+
+class ProfThreadMgr : public IProfThreadMgr {
+public:
+    ProfThreadMgr() {
         // estimate profiler penalty
-        DummyThreadMgr dummyThreadMgr;
-        auto* threadProf = new ThreadProf(dummyThreadMgr); // dump all events to Mgr on destroy
-
+        //DummyProfThreadMgr gDummyProfThreadMgr;
+        //auto* gDummyProfThread = new ProfThread(gDummyProfThreadMgr); // dump all events to Mgr on destroy
         timer::wallclock_t start_wc = timer::wallclock::timestamp();
-        unsigned n = 10*1000;
+        unsigned n = 100*1000;
         for(unsigned i = 0; i < n; i++) {
-            auto *pp = threadProf->push("dummy", true);
-            threadProf->pop(pp);
+            void *handle = FPSPROF_start_dummy("dummy");
+            FPSPROF_stop_dummy(handle);
         }
         timer::wallclock_t stop_wc = timer::wallclock::timestamp();
 
         // dump events
-        delete threadProf;
+        delete gDummyProfThread;
+        gDummyProfThread = NULL;
 
         // collect counters
         uint64_t self_nsec = 0;
-        for(const auto& pp: dummyThreadMgr.storage) {
+        for(const auto& pp: gDummyProfThreadMgr.storage) {
             self_nsec += pp.realtime_stop() - pp.realtime_start();
         }
         int64_t children_nsec = timer::wallclock::diff(stop_wc, start_wc);
@@ -160,7 +179,7 @@ public:
         _penalty_children_nsec = children_nsec;
     }
 
-    ~ThreadMgr() {
+    ~ProfThreadMgr() {
         if (!_serialize_filename.empty()) {
             std::ofstream ofs(_serialize_filename, std::ios::out | std::ios::binary | std::ios::trunc);
             if (ofs.is_open()) {
@@ -194,7 +213,7 @@ public:
     void set_report_file(const char* filename) {
         _report_filename = filename ? filename : "";
     }
-    void onThreadProfExit(std::list<ProfPoint>&& marks) override {
+    void onProfThreadExit(std::list<ProfPoint>&& marks) override {
         // TODO: critical section
         _reporter.AddRawThread(std::move(marks));
     }
@@ -213,8 +232,8 @@ private:
 };
 
 timer::wallclock_t ProfPoint::_init_wc = timer::wallclock::timestamp();
-static ThreadMgr gThreadMgr;
-static thread_local ThreadProf gThreadProf(gThreadMgr);
+static ProfThreadMgr gThreadMgr;
+static thread_local ProfThread gProfThread(gThreadMgr);
 
 extern void GetPenalty(unsigned& penalty_denom, uint64_t& penalty_self_nsec, uint64_t& penalty_children_nsec)
 {
@@ -240,13 +259,13 @@ extern "C" void FPSPROF_report_file(const char* filename)
 }
 extern "C" void* FPSPROF_start_frame(const char* name)
 {
-    return fpsprof::gThreadProf.push(name, true);
+    return fpsprof::gProfThread.push(name, true);
 }
 extern "C" void* FPSPROF_start(const char* name)
 {
-    return fpsprof::gThreadProf.push(name, false);
+    return fpsprof::gProfThread.push(name, false);
 }
 extern "C" void FPSPROF_stop(void* handle)
 {
-    fpsprof::gThreadProf.pop((fpsprof::ProfPoint*)handle);
+    fpsprof::gProfThread.pop((fpsprof::ProfPoint*)handle);
 }
