@@ -17,9 +17,147 @@
 #define USE_FASTWRITE_STORAGE 1
 namespace fpsprof {
 
-class ThreadMgr {
+class IThreadMgr {
 public:
+    // every thread dumps all collected events to attached manager on destroy
+    virtual void onThreadProfExit(std::list<ProfPoint>&& marks) = 0;
+};
+
+struct ThreadProf {
+    explicit ThreadProf(IThreadMgr& threadMgr) : _threadMgr(threadMgr) {}
+    ~ThreadProf();
+    ProfPoint* push(const char* name, bool frame_flag);
+    void pop(ProfPoint* pp);
+
+private:
+    void panic_and_exit(ProfPoint* pp);
+
+    IThreadMgr& _threadMgr;
+#if !USE_FASTWRITE_STORAGE
+    std::list<ProfPoint> _storage;
+#else
+    fastwrite_storage_t<ProfPoint> _storage;
+#endif
+
+    int _stack_level = 0;
+    unsigned _events_count_prev = 0;
+    unsigned _events_num_max = 0;
+
+#ifndef NDEBUG
+    const ProfPoint* _pp_last_in = NULL;
+    const ProfPoint* _pp_last_out = NULL;
+#endif
+};
+
+ThreadProf::~ThreadProf()
+{
+    std::list<ProfPoint> storage;
+#if !USE_FASTWRITE_STORAGE
+    storage = std::move(_storage);
+#else
+    storage = _storage.to_list();
+#endif
+    _threadMgr.onThreadProfExit(std::move(storage));
+}
+
+ProfPoint* ThreadProf::push(const char* name, bool frame_flag)
+{
+    bool measure_process_time = false;
+#if !USE_FASTWRITE_STORAGE
+    _storage.emplace_back(name, _stack_level++, frame_flag, measure_process_time);
+    ProfPoint* pp = &_storage.back(); // safe for a list<>
+#else
+    if (_stack_level == 0) {
+        unsigned events_count = _storage.size();
+        unsigned events_num = events_count - _events_count_prev;
+        _events_num_max = std::max(_events_num_max, events_num);
+        _events_count_prev = events_count;
+        _storage.reserve(3 * _events_num_max);
+    }
+    ProfPoint* pp = _storage.alloc_item();
+    *pp = ProfPoint(name, _stack_level++, frame_flag, measure_process_time);
+#endif
+#ifndef NDEBUG
+    _pp_last_in = pp;
+#endif
+    pp->Start(_storage.get_overhead_wc());
+    return pp;
+}
+void ThreadProf::pop(ProfPoint* pp)
+{
+    _stack_level--;
+
+    if (pp->stack_level() != _stack_level) {
+        panic_and_exit(pp);
+    }
+    pp->Stop(_storage.get_overhead_wc());
+    #ifndef NDEBUG
+    _pp_last_out = pp;
+    #endif
+}
+void ThreadProf::panic_and_exit(ProfPoint* pp) {
+    const char* exit_name = pp->name();
+    unsigned exit_level = pp->stack_level();
+    std::list<ProfPoint> storage;
+#if !USE_FASTWRITE_STORAGE
+    storage = std::move(_storage);
+#else
+    storage = _storage.to_list();
+#endif
+    for (const auto& mark : storage) {
+        if (mark.complete()) {
+            continue;
+        }
+        unsigned n = mark.stack_level();
+        char info[32] = "";
+        if (n == exit_level && mark.name() == exit_name) {
+            strcpy(info, " <- exit is here");
+        }
+        fprintf(stderr, "%2u: %*s %s%s\n", n, 2*n, "", mark.name(), info);
+    }
+    fprintf(stderr, "error: pop '%s' event with a stack level of %u, "
+        "but current stack level is %u\n",  exit_name, exit_level, _stack_level);
+
+    exit(1);
+}
+
+class ThreadMgr : public IThreadMgr {
+public:
+    struct DummyThreadMgr : public IThreadMgr {
+    public:
+        void onThreadProfExit(std::list<ProfPoint>&& marks) override { storage = std::move(marks); }
+        std::list<ProfPoint> storage;
+    };
+
     ThreadMgr() {
+        // estimate profiler penalty
+        DummyThreadMgr dummyThreadMgr;
+        auto* threadProf = new ThreadProf(dummyThreadMgr); // dump all events to Mgr on destroy
+
+        timer::wallclock_t start_wc = timer::wallclock::timestamp();
+        unsigned n = 10*1000;
+        for(unsigned i = 0; i < n; i++) {
+            auto *pp = threadProf->push("dummy", true);
+            threadProf->pop(pp);
+        }
+        timer::wallclock_t stop_wc = timer::wallclock::timestamp();
+
+        // dump events
+        delete threadProf;
+
+        // collect counters
+        uint64_t self_nsec = 0;
+        for(const auto& pp: dummyThreadMgr.storage) {
+            self_nsec += pp.realtime_stop() - pp.realtime_start();
+        }
+        int64_t children_nsec = timer::wallclock::diff(stop_wc, start_wc);
+//#ifndef NDEBUG
+        fprintf(stderr, "wallclock penalty per %d marks: self %.8f sec (%10.0f nsec), children %.8f sec (%10.0f nsec)\n",
+                n, self_nsec*1e-9, (double)self_nsec, children_nsec*1e-9, (double)children_nsec);
+//#endif
+        _penalty_denom = n;
+        _penalty_self_nsec = self_nsec;
+        _penalty_children_nsec = children_nsec;
     }
 
     ~ThreadMgr() {
@@ -56,18 +194,11 @@ public:
     void set_report_file(const char* filename) {
         _report_filename = filename ? filename : "";
     }
-    void onThreadProfExit(std::list<ProfPoint>&& marks) {
+    void onThreadProfExit(std::list<ProfPoint>&& marks) override {
         // TODO: critical section
         _reporter.AddRawThread(std::move(marks));
     }
 
-    // temporary
-    bool have_panalty() const { return _penalty_denom != 0; }
-    void set_panalty(unsigned penalty_denom, uint64_t penalty_self_nsec, uint64_t penalty_children_nsec) {
-        _penalty_denom = penalty_denom;
-        _penalty_self_nsec = penalty_self_nsec;
-        _penalty_children_nsec = penalty_children_nsec;
-    }
 private:
     FILE* _serialize = NULL;
     std::string _serialize_filename;
@@ -77,139 +208,8 @@ private:
     Reporter _reporter;
 
     unsigned _penalty_denom = 0;
-    int64_t _penalty_children_nsec = 0;
     int64_t _penalty_self_nsec = 0;
-};
-
-struct ThreadProf {
-    explicit ThreadProf(ThreadMgr& threadMgr) : _threadMgr(threadMgr) {
-        if(!_threadMgr.have_panalty()) {
-            estimate_penalty();
-        }
-    }
-    ~ThreadProf() {
-        if (_storage.size() == 0) {
-            return;
-        }
-        std::list<ProfPoint> storage;
-#if !USE_FASTWRITE_STORAGE
-        storage = std::move(_storage);
-#else
-        storage = _storage.to_list();
-#endif
-        _threadMgr.onThreadProfExit(std::move(storage));
-    }
-
-    ProfPoint* push(const char* name, bool frame_flag) {
-        bool measure_process_time = false;
-#if !USE_FASTWRITE_STORAGE
-        _storage.emplace_back(name, _stack_level++, frame_flag, measure_process_time);
-        ProfPoint* pp = &_storage.back(); // safe for a list<>
-#else
-        if (_stack_level == 0) {
-            unsigned events_count = _storage.size();
-            unsigned events_num = events_count - _events_count_prev;
-            _events_num_max = std::max(_events_num_max, events_num);
-            _events_count_prev = events_count;
-            _storage.reserve(3 * _events_num_max);
-        }
-        ProfPoint* pp = _storage.alloc_item();
-        *pp = ProfPoint(name, _stack_level++, frame_flag, measure_process_time);
-#endif
-#ifndef NDEBUG
-        _pp_last_in = pp;
-#endif
-        pp->Start(_storage.get_overhead_wc());
-        return pp;
-    }
-    void pop(ProfPoint* pp) {
-        _stack_level--;
-
-        if (pp->stack_level() != _stack_level) {
-            panic_and_exit(pp);
-        }
-        pp->Stop(_storage.get_overhead_wc());
-#ifndef NDEBUG
-        _pp_last_out = pp;
-#endif
-    }
-
-private:
-    void estimate_penalty() {
-        timer::wallclock_t start_wc = timer::wallclock::timestamp();
-        unsigned n = 10*1000;
-        for(unsigned i = 0; i < n; i++) {
-            void* handle = FPSPROF_start("dummy");
-            FPSPROF_stop(handle);
-            //sum_nsec += pp.realtime_stop() - pp.realtime_start();
-        }
-        timer::wallclock_t stop_wc = timer::wallclock::timestamp();
-
-        std::list<ProfPoint> storage;
-#if !USE_FASTWRITE_STORAGE
-        storage = std::move(_storage);
-#else
-        storage = _storage.to_list();
-        _storage.clear();
-#endif
-        uint64_t sum_nsec = 0;
-        for(const auto& pp: storage) {
-            sum_nsec += pp.realtime_stop() - pp.realtime_start();
-        }
-        int64_t self_nsec = sum_nsec;
-        int64_t children_nsec = timer::wallclock::diff(stop_wc, start_wc);
-//#ifndef NDEBUG
-        fprintf(stderr, "wallclock penalty per %d marks: self %.8f sec (%10.0f nsec), children %.8f sec (%10.0f nsec)\n",
-                n, self_nsec*1e-9, (double)self_nsec, children_nsec*1e-9, (double)children_nsec);
-//#endif
-        _threadMgr.set_panalty(n, self_nsec, children_nsec);
-
-        _stack_level = 0;
-        _events_count_prev = 0;
-        _events_num_max = 0;
-    }
-
-private:
-    void panic_and_exit(ProfPoint* pp) {
-        const char* exit_name = pp->name();
-        unsigned exit_level = pp->stack_level();
-        std::list<ProfPoint> storage;
-#if !USE_FASTWRITE_STORAGE
-        storage = std::move(_storage);
-#else
-        storage = _storage.to_list();
-#endif
-        for (const auto& mark : storage) {
-            if (mark.complete()) {
-                continue;
-            }
-            unsigned n = mark.stack_level();
-            char info[32] = "";
-            if (n == exit_level && mark.name() == exit_name) {
-                strcpy(info, " <- exit is here");
-            }
-            fprintf(stderr, "%2u: %*s %s%s\n", n, 2*n, "", mark.name(), info);
-        }
-        fprintf(stderr, "error: pop '%s' event with a stack level of %u, "
-            "but current stack level is %u\n",  exit_name, exit_level, _stack_level);
-
-        exit(1);
-    }
-    ThreadMgr& _threadMgr;
-#if !USE_FASTWRITE_STORAGE
-    std::list<ProfPoint> _storage;
-#else
-    fastwrite_storage_t<ProfPoint> _storage;
-#endif
-
-    int _stack_level = 0;
-    unsigned _events_count_prev = 0;
-    unsigned _events_num_max = 0;
-
-#ifndef NDEBUG
-    const ProfPoint* _pp_last_in = NULL;
-    const ProfPoint* _pp_last_out = NULL;
-#endif
+    int64_t _penalty_children_nsec = 0;
 };
 
 timer::wallclock_t ProfPoint::_init_wc = timer::wallclock::timestamp();
