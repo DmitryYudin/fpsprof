@@ -85,7 +85,7 @@ public:
     std::list<item_t> to_list() { // destructive
         std::list<item_t> out;
 #ifndef NDEBUG
-        printf("alloc overhead = %.8f sec\n", timer::wallclock::diff(_alloc_overhead_wc, 0)*1e-9);
+        //printf("alloc overhead = %.8f sec\n", timer::wallclock::diff(_alloc_overhead_wc, 0)*1e-9);
 #endif
         if (_next_idx == 0 || _reading) { // read once
             return out;

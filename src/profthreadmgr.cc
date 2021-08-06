@@ -59,17 +59,17 @@ static std::list<uint64_t> collect_counters(unsigned n)
     return data;
 }
 
-#define N (1000*1000)
-
-static void build_hist(const std::list<uint64_t>& data, uint64_t children_nsec)
+static void refine_counter_lo(const std::list<uint64_t>& data, uint64_t& refined_sum, unsigned& refined_cnt)
 {
-    unsigned hist_sz = 1024;
-    unsigned *hist = new unsigned[hist_sz];
-
-    memset(hist, 0, sizeof(*hist)*hist_sz);
     if(data.empty()) {
+        refined_sum = 0;
+        refined_cnt = 0;
         return;
     }
+    unsigned hist_sz = 1024;
+    unsigned *hist = new unsigned[hist_sz];
+    memset(hist, 0, sizeof(*hist)*hist_sz);
+
     uint64_t min = 0, max = data.front();
     for(auto d: data) {
         min = std::min(min, d);
@@ -83,15 +83,6 @@ static void build_hist(const std::list<uint64_t>& data, uint64_t children_nsec)
         hist[idx] += 1;
     }
 
-    int cnt_remove = (int)(data.size()*.05);
-    int idx_end = hist_sz - 1;
-    for(;idx_end > 0; idx_end--) {
-        cnt_remove -= hist[idx_end];
-        if(cnt_remove <= 0) {
-            break;
-        }
-    }
-
     // first (nonzero) max bin
     unsigned hist_max = 0, bin_max = 0;
     for(unsigned i = 1; i < hist_sz; i++) {
@@ -101,20 +92,15 @@ static void build_hist(const std::list<uint64_t>& data, uint64_t children_nsec)
         }
     }
 
-    /*
-    idx_end = hist_sz - 1;
-    for(;idx_end > 0; idx_end--) {
-        if(hist[idx_end] > (unsigned)(hist[bin_max]*.95)) {
-            break;
-        }
-    }
-    */
-    for(idx_end = bin_max; idx_end < (int)hist_sz; idx_end++) {
+    int idx_end = bin_max;
+    for(; idx_end < (int)hist_sz; idx_end++) {
         if(hist[idx_end] < (unsigned)(hist[bin_max]*.95)) {
             break;
         }
     }
-    idx_end = 10;
+    unsigned fac = 5;
+    idx_end = (bin_max+1)*fac; // only consider values x times greater than max_at_bin_max
+
     unsigned cnt = 0;
     uint64_t sum = 0, sum2 = 0;
     for(auto d: data) {
@@ -127,70 +113,75 @@ static void build_hist(const std::list<uint64_t>& data, uint64_t children_nsec)
         }
     }
 
-    fprintf(stderr, "hist (nsec): %8.2f %8.2f\n", (double)sum / cnt, (double)(children_nsec - sum2) / cnt);
-/*
-    unsigned hist_max = 0, hist_pos = 0;
-    for(unsigned i = 0; i < hist_sz; i++) {
-        if(hist_max < hist[i]) {
-            hist_max = hist[i];
-            hist_pos = i;
+    refined_sum = sum;
+    refined_cnt = cnt;
+
+    delete [] hist;
+}
+
+static double refine_counter_hi(const std::list< double >& data)
+{
+    double sum = 0;
+    for(const auto d: data) {
+        sum += d;
+    }
+    double avg = sum / data.size(), sigma = 0;
+    for(const auto d: data) {
+        sigma += (d - avg)*(d - avg);
+    }
+    sigma = sqrtl(sigma / data.size());
+
+    unsigned n = 0;
+    sum = 0;
+    for(const auto d: data) { // sigma ~ 68%, 2*sigma ~ 95%
+        if( avg - sigma < d && d < avg + sigma) {
+            sum += d;
+            n += 1;
         }
     }
-
-    uint64_t sum = 0;
-    for(auto d: data) {
-        unsigned idx = (unsigned)( (d - min)/bin_width );
-        if(idx == hist_pos) {
+    if(n == 0) { // maybe
+        for(const auto d: data) {
             sum += d;
         }
+        n = (unsigned)data.size();
     }
-    sum = sum*N/hist[hist_pos];
-    fprintf(stderr, "hist:%d %10.0f at %6d //// %.8f sec (%10.0f nsec)\n", hist_sz, (double)hist[hist_pos]/N*100, hist_pos, sum*1e-9, (double)sum);
-    */
-    delete [] hist;
+    return sum / n;
 }
 
 ProfThreadMgr::ProfThreadMgr()
     : _reporter(new Reporter)
 {
-    unsigned n = N;
-    auto data = collect_counters(n);
+    std::list< double > stat_s, stat_c;
+    unsigned num_outer = 100, num_inner = 10000;
+    while(num_outer--) {
+        auto data = collect_counters(num_inner);
 
-    uint64_t children_nsec = data.front();
-    data.pop_front();
-    uint64_t self_nsec = 0;
-    for(const auto& nsec: data) {
-        self_nsec += nsec;
-    }
-    uint64_t avg = self_nsec / n;
-    uint64_t sigma = 0;
-    for(const auto& nsec: data) {
-        sigma += (nsec - avg)*(nsec - avg);
-    }
-    sigma = (uint64_t)sqrtl((double)sigma/n);
+        uint64_t children_nsec = data.front();
+        data.pop_front();
 
-    unsigned n2 = 0;
-    uint64_t s2 = 0, low = avg > 2*sigma ? avg - 2*sigma : 0, hi = avg + 2*sigma;
-    for(const auto& nsec: data) {
-        if(low < nsec && nsec < hi) {
-            s2 += nsec;
-            n2++;
-        }
+        uint64_t self_nsec;
+        unsigned refined_cnt;
+        refine_counter_lo(data, self_nsec, refined_cnt);
+        
+        stat_s.push_back((double)self_nsec / refined_cnt);
+        stat_c.push_back((double)children_nsec / data.size());
     }
-    s2 *= n;
-    s2 /= n2; // normalize to n
-//#ifndef NDEBUG
-    //fprintf(stderr, "wallclock penalty per %d marks: self %.8f sec (%10.0f nsec), children %.8f sec (%10.0f nsec) / %.8f sec (%10.0f nsec)\n",
-//            n, self_nsec*1e-9, (double)self_nsec, children_nsec*1e-9, (double)children_nsec, s2*1e-9, (double)s2);
-// 
-    fprintf(stderr, "wallclock penalty (nsec): self %8.2f, children %8.2f / %8.2f\n",
-            (double)self_nsec/n, (double)children_nsec/n, (double)s2/n);
-//#endif
-    _penalty_denom = n;
-    _penalty_self_nsec = self_nsec;
-    _penalty_children_nsec = children_nsec;
 
-    build_hist(data, children_nsec);
+    double sum_s = 0;
+    for(const auto d: stat_s) {
+        sum_s += d;
+    }
+
+    double self_nsec = sum_s / stat_s.size();
+    //double children_nsec = sum_c / stat_c.size();
+    double children_nsec = refine_counter_hi(stat_c);
+
+#ifndef NDEBUG
+    fprintf(stderr, "wallclock penalty (nsec): self %8.2f, children %8.2f\n", self_nsec, children_nsec);
+#endif
+    _penalty_denom = 10000;
+    _penalty_self_nsec = (uint64_t)(_penalty_denom * self_nsec);
+    _penalty_children_nsec = (uint64_t)(_penalty_denom * children_nsec);
 }
 
 ProfThreadMgr::~ProfThreadMgr() {
