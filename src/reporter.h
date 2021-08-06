@@ -23,10 +23,10 @@ public:
     void Serialize(std::ostream& os) const;
 
     // one-shot (destroy data on return)
-    std::string Report();
+    std::string Report(double self_nsec = -1, double childer_nsec = -1);
 
 private:
-    std::string report();
+    std::string report(double self_nsec, double childer_nsec);
     ThreadMap _threadMap;
 };
 

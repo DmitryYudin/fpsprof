@@ -25,6 +25,8 @@ struct ThreadMap
     uint64_t reported_penalty_children_nsec() const { return _penalty_children_nsec; }
     const std::map<int, Node* >& threads() const { return _threads; };
 
+    void set_penalty(double self_nsec = 1, double childer_nsec = -1);
+
 private:
     unsigned _penalty_denom = 0;
     uint64_t _penalty_self_nsec = 0;

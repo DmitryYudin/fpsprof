@@ -79,11 +79,13 @@ void generate_reports(
     }
 }
 
-std::string Reporter::report()
+std::string Reporter::report(double self_nsec, double childer_nsec)
 {
     if(_threadMap.threads().empty()) {
         return "";
     }
+    _threadMap.set_penalty(self_nsec, childer_nsec);
+
     fprintf(stderr, "Generating reports\n");
 
     std::map< int, Node* > threadsFull, threadsNoRecur;
@@ -129,10 +131,10 @@ std::string Reporter::report()
 #endif
 }
 
-std::string Reporter::Report()
+std::string Reporter::Report(double self_nsec, double childer_nsec)
 {
     try {
-        return this->report();
+        return this->report(self_nsec, childer_nsec);
     } catch (std::exception& e) {
         fprintf(stderr, "exception: %s\n", e.what());
         return "";

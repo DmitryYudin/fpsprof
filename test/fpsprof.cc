@@ -46,17 +46,30 @@ int main(int argc, char *argv[])
     static const struct option long_options[] = {
         { "help",   no_argument,        0, 'h' },
         { "input",  required_argument,  0, 'i' },
+        { "self",  required_argument,  0, 's' },
+        { "children",  required_argument,  0, 'c' },
         //{ "report", required_argument,  0, 'r' },
         //{ "stack",  required_argument,  0, 's' },
     };
     const char* filename = NULL;
+    double self_nsec = -1, children_nsec = -1;
     int ch;
-    while ((ch = getopt_long(argc, argv, "hi:r:s:", long_options, 0)) != EOF) {
+    while ((ch = getopt_long(argc, argv, "hi:s:c:", long_options, 0)) != EOF) {
         switch (ch) {
         case 'h':
             return usage(), 0;
         case 'i':
             filename = optarg;
+            break;
+        case 's':
+            if (sscanf(optarg, "%lf", &self_nsec) != 1) {
+                TRACE_ERR(1, "invalid argument for '-s' option: %s", optarg)
+            }
+            break;
+        case 'c':
+            if (sscanf(optarg, "%lf", &children_nsec) != 1) {
+                TRACE_ERR(1, "invalid argument for '-c' option: %s", optarg)
+            }
             break;
         //case 'r':
         //    if (sscanf(optarg, "%u", &reportFlags) != 1) {
@@ -87,7 +100,7 @@ int main(int argc, char *argv[])
     fpsprof::Reporter reporter;
     TRACE_ERR(!reporter.Deserialize(filename), "failed to parse profiler log: %s", filename)
 
-    std::string report = reporter.Report();
+    std::string report = reporter.Report(self_nsec, children_nsec);
     printf("%s\n", report.c_str());
 
 

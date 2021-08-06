@@ -6,6 +6,7 @@
 #include <ostream>
 #include <iomanip>
 #include <fstream>
+#include <stdexcept>
 
 namespace fpsprof {
 
@@ -281,6 +282,20 @@ void ThreadMap::Serialize(std::ostream& os) const
             thread_time = start_time;
         }
     }
+}
+
+
+void ThreadMap::set_penalty(double self_nsec, double childer_nsec)
+{
+    if(_penalty_denom == 0) {
+        throw std::runtime_error("penalty resolution not set");
+    }
+    if(self_nsec >= 0) {
+        _penalty_self_nsec = uint64_t(_penalty_denom * self_nsec);
+    }
+    if(childer_nsec >= 0) {
+        _penalty_children_nsec = uint64_t(_penalty_denom * childer_nsec);
+    }        
 }
 
 }
